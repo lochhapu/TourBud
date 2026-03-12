@@ -1,3 +1,9 @@
+"""
+    Welcome to the backend file! Careful touching this!
+    Just use the setup instructions, and try to run it.
+    Make sure to get Python3 on your device.
+"""
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sqlite3
@@ -55,6 +61,7 @@ def get_user_id_from_token(token):
 @app.route("/api/", methods=["GET"])
 def index():
     return "hello, world"
+
 
 @app.route("/api/register", methods=["POST"])
 def register():
@@ -119,6 +126,7 @@ def register():
 
     conn.close()
     return jsonify({"message": "User registered"}), 201
+
 
 if __name__ == "__main__":
     app.run(debug=True)
