@@ -11,16 +11,16 @@ A mobile travel planning app that helps users manage trips, track budgets, store
 - Currency converter
 
 ## Tech Stack
-Frontend: Flutter
-Backend: Flask
-Database: SQLite
-Design: Figma
+- Frontend: Flutter
+- Backend: Flask
+- Database: SQLite
+- Design: Figma
 
 ## Team
 - Lochana Hapugoda
 - Nethini Sethulya
 - Kavindu Viduranga
 - Damian Kenny
-- Lehara
-- Paveesha
+- Lehara Abeysundera
+- Paveesha Perera
 - Chanul Liyanage
