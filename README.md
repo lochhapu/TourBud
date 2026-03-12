@@ -23,3 +23,4 @@ Design: Figma
 - Damian Kenny
 - Lehara
 - Paveesha
+- Chanul Liyanage
