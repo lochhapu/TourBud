@@ -57,10 +57,73 @@ def get_user_id_from_token(token):
     return row["user_id"]
 
 
-# Home route
 @app.route("/api/", methods=["GET"])
 def index():
-    return "Welcome to the TourBud API! Talk to Loch if you have any questions."
+    """
+    API root endpoint - returns a friendly introduction to TourBud API
+    """
+    api_info = {
+        "message": "👋 Welcome to TourBud API!",
+        "description": "Your travel companion for connecting with fellow explorers.",
+        "version": "1.0.0",
+        "status": "operational",
+        "endpoints": {
+            "GET /": {
+                "description": "You're here! This friendly introduction",
+                "auth_required": False
+            },
+            "POST /register": {
+                "description": "Create a new account",
+                "auth_required": False,
+                "expected_body": {
+                    "username": "string",
+                    "password": "string"
+                },
+                "example_response": {
+                    "message": "User registered"
+                }
+            },
+            "POST /login": {
+                "description": "Login and get a session token",
+                "auth_required": False,
+                "expected_body": {
+                    "username": "string",
+                    "password": "string"
+                },
+                "example_response": {
+                    "token": "a1b2c3d4e5f6...",
+                    "expires_at": 1700000000,
+                    "message": "Login successful"
+                }
+            },
+            "POST /logout": {
+                "description": "Logout and invalidate your session token",
+                "auth_required": True,
+                "auth_method": "Bearer token in Authorization header",
+                "example_headers": {
+                    "Authorization": "Bearer <your-token-here>"
+                },
+                "example_response": {
+                    "message": "Logged out successfully"
+                }
+            }
+        },
+        "quick_start": {
+            "1_create_account": "curl -X POST http://localhost:5000/register -H 'Content-Type: application/json' -d '{\"username\": \"traveler123\", \"password\": \"securepass\"}'",
+            "2_login": "curl -X POST http://localhost:5000/login -H 'Content-Type: application/json' -d '{\"username\": \"traveler123\", \"password\": \"securepass\"}'",
+            "3_logout": "curl -X POST http://localhost:5000/logout -H 'Authorization: Bearer YOUR-TOKEN-HERE'"
+        },
+        "notes": [
+            "🔐 Passwords are stored in plaintext (demo only!)",
+            "⏰ Sessions expire after 7 days",
+            "🧹 Expired sessions are automatically cleaned up",
+            "🚀 More endpoints coming soon!"
+        ],
+        "docs": "Check the source code or README for more details",
+        "support": "Happy travels! 🌍✈️"
+    }
+    
+    return jsonify(api_info)
 
 
 @app.route("/api/register", methods=["POST"])
