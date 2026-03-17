@@ -5,7 +5,11 @@
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL -- No hashing because we are building a demo MVP
+    password TEXT NOT NULL, -- No hashing because we are building a demo MVP
+    full_name TEXT,
+    contact_number TEXT,
+    date_of_birth TEXT, -- Stored as YYYY-MM-DD format
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
 CREATE TABLE sessions (
