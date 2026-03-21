@@ -110,6 +110,40 @@ def index():
                 "example_response": {
                     "message": "Logged out successfully"
                 }
+            },
+
+            "GET /profile": {
+                "description": "Get your profile information",
+                "auth_required": True,
+                "auth_method": "Bearer token in Authorization header",
+                "example_response": {
+                    "id": 1,
+                    "username": "traveler123",
+                    "full_name": "John Doe",
+                    "contact_number": "+1234567890",
+                    "date_of_birth": "1990-01-01",
+                    "member_since": 1700000000,
+                    "member_since_formatted": "January 2024"
+                }
+            },
+
+            "PUT /profile": {
+                "description": "Update your profile information (all fields optional)",
+                "auth_required": True,
+                "auth_method": "Bearer token in Authorization header",
+                "expected_body": {
+                    "full_name": "John Doe (optional)",
+                    "contact_number": "+1234567890 (optional)",
+                    "date_of_birth": "1990-01-01 (optional)"
+                },
+                "example_response": {
+                    "id": 1,
+                    "username": "traveler123",
+                    "full_name": "John Doe",
+                    "contact_number": "+1234567890",
+                    "date_of_birth": "1990-01-01",
+                    "message": "Profile updated successfully"
+                }
             }
         },
 
@@ -128,7 +162,7 @@ def index():
 
         "support": "Ask Loch if any questions. Happy travels! 🌍✈️"
     }
-    
+
     return jsonify(api_info)
 
 
@@ -347,6 +381,190 @@ def logout():
 
     return jsonify({"message": "Logged out successfully"}), 200
 
+
+@app.route("/api/profile", methods=["GET"])
+def get_profile():
+    """
+    Get the authenticated user's profile information.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: User profile data
+        - 401: Unauthorized if token missing/invalid
+    """
+    # Get token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    # Extract token
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    
+    # Get user_id from token
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get user profile (exclude password)
+    cursor.execute(
+        """
+        SELECT id, username, full_name, contact_number, date_of_birth, created_at
+        FROM users WHERE id = ?
+        """,
+        (user_id,)
+    )
+    
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user is None:
+        return jsonify({"error": "User not found"}), 404
+    
+    # Format the response
+    profile = {
+        "id": user["id"],
+        "username": user["username"],
+        "full_name": user["full_name"],
+        "contact_number": user["contact_number"],
+        "date_of_birth": user["date_of_birth"],
+        "member_since": user["created_at"],
+        "member_since_formatted": time.strftime("%B %Y", time.localtime(user["created_at"]))
+    }
+    
+    return jsonify(profile), 200
+
+
+@app.route("/api/profile", methods=["PUT"])
+def update_profile():
+    """
+    Update the authenticated user's profile information.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected JSON (all fields optional):
+    {
+        "full_name": "John Doe",
+        "contact_number": "+1234567890",
+        "date_of_birth": "1990-01-01"
+    }
+    
+    Returns:
+        - 200: Updated profile data
+        - 400: Invalid data
+        - 401: Unauthorized if token missing/invalid
+    """
+    # Get token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    # Extract token
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    
+    # Get user_id from token
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Ensure request is JSON
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 415
+    
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    
+    # Build update query dynamically based on provided fields
+    updates = []
+    values = []
+    
+    # Check each field and validate
+    if "full_name" in data:
+        if not isinstance(data["full_name"], str):
+            return jsonify({"error": "full_name must be string"}), 400
+        updates.append("full_name = ?")
+        values.append(data["full_name"])
+    
+    if "contact_number" in data:
+        if not isinstance(data["contact_number"], str):
+            return jsonify({"error": "contact_number must be string"}), 400
+        # Optional: Add phone number validation here
+        updates.append("contact_number = ?")
+        values.append(data["contact_number"])
+    
+    if "date_of_birth" in data:
+        if not isinstance(data["date_of_birth"], str):
+            return jsonify({"error": "date_of_birth must be string"}), 400
+        # Validate date format (YYYY-MM-DD)
+        try:
+            time.strptime(data["date_of_birth"], "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "date_of_birth must be in YYYY-MM-DD format"}), 400
+        updates.append("date_of_birth = ?")
+        values.append(data["date_of_birth"])
+    
+    # If no valid fields to update
+    if not updates:
+        return jsonify({"error": "No valid fields to update"}), 400
+    
+    # Add user_id to values and build query
+    values.append(user_id)
+    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute(query, values)
+        conn.commit()
+        
+        # Fetch updated profile
+        cursor.execute(
+            """
+            SELECT id, username, full_name, contact_number, date_of_birth, created_at
+            FROM users WHERE id = ?
+            """,
+            (user_id,)
+        )
+        
+        updated_user = cursor.fetchone()
+        conn.close()
+        
+        profile = {
+            "id": updated_user["id"],
+            "username": updated_user["username"],
+            "full_name": updated_user["full_name"],
+            "contact_number": updated_user["contact_number"],
+            "date_of_birth": updated_user["date_of_birth"],
+            "member_since": updated_user["created_at"],
+            "message": "Profile updated successfully"
+        }
+        
+        return jsonify(profile), 200
+        
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({"error": "Database error occurred"}), 500
+
+
+@app.route("/api/profile", methods=["PATCH"])
+def patch_profile():
+    """
+    Alias for PUT /profile - allows partial updates.
+    Simply calls the update_profile function.
+    """
+    return update_profile()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
