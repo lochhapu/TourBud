@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:tour_bud/config.dart';
 
 class RegisterPage extends StatelessWidget {
   TextEditingController usernameController = TextEditingController();
@@ -28,7 +29,7 @@ class RegisterPage extends StatelessWidget {
 
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:5000/api/register'),
+        Uri.parse('${AppConfig.baseUrl}/api/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': username, 'password': password}),
       );
