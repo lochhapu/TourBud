@@ -29,7 +29,7 @@ class RegisterPage extends StatelessWidget {
 
     try {
       final response = await http.post(
-        Uri.parse('${AppConfig.baseUrl}/api/register'),
+        Uri.parse('${AppConfig.baseUrl}/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': username, 'password': password}),
       );
