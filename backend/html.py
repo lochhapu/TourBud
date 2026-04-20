@@ -1,6 +1,7 @@
 def api_info():
     return """
-        <!DOCTYPE html>
+      
+          <!DOCTYPE html>
     <html>
     <head>
         <title>🌍 TourBud API - Your Travel Companion</title>
