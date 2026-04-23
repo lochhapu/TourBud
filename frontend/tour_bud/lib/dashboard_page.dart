@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:tour_bud/config.dart';
 import 'my_trips.dart';
 import 'widgets/bottom_nav_bar.dart';
+import 'profile_page.dart';
 
 class MyWidget extends StatefulWidget {
   const MyWidget({super.key});
@@ -85,7 +86,12 @@ class _MyWidgetState extends State<MyWidget> {
                         IconButton(
                           icon:
                               const Icon(Icons.person_outline, color: Colors.white),
-                          onPressed: () {},
+                          onPressed: () {
+                             Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfileDetailsScreen()),
+    );
+                          },
                         ),
                       ],
                     ),
