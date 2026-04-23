@@ -61,13 +61,11 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
                     children: [
                       IconButton(
                         onPressed: () {},
-                        icon: const Icon(Icons.notifications_none,
-                            color: navy),
+                        icon: const Icon(Icons.notifications_none, color: navy),
                       ),
                       IconButton(
                         onPressed: () {},
-                        icon:
-                            const Icon(Icons.person_outline, color: navy),
+                        icon: const Icon(Icons.person_outline, color: navy),
                       ),
                     ],
                   ),
@@ -105,22 +103,88 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // To-do and Gallery Row
+                    // Search Bar + Add New Location Row
                     Row(
                       children: [
+                        // Search Bar
                         Expanded(
-                          child: _buildSmallFeatureCard(
-                            title: 'To-do',
-                            icon: Icons.checklist_rtl,
-                            onTap: () {},
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: teal.withOpacity(0.5),
+                                width: 1.4,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: navy.withOpacity(0.06),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Search location...',
+                                hintStyle: TextStyle(
+                                  fontSize: 13,
+                                  color: navy.withOpacity(0.4),
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.search_rounded,
+                                  color: teal,
+                                  size: 20,
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildSmallFeatureCard(
-                            title: 'Gallery',
-                            icon: Icons.image_outlined,
-                            onTap: () {},
+                        const SizedBox(width: 12),
+
+                        // Add New Location Button
+                        GestureDetector(
+                          onTap: () {},
+                          child: Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: teal,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: teal.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.add_location_alt_outlined,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Add New\nLocation',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -179,8 +243,7 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
           _buildDetailRow(
             icon: Icons.calendar_today_outlined,
             label: 'Duration',
-            value:
-                '${widget.trip.startDate} → ${widget.trip.endDate}',
+            value: '${widget.trip.startDate} → ${widget.trip.endDate}',
           ),
           const SizedBox(height: 12),
           _buildDetailRow(
@@ -267,47 +330,6 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSmallFeatureCard({
-    required String title,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: sage.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: darkSage, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: darkSage.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 24, color: navy),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: navy,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
         ),
       ),
     );
