@@ -32,6 +32,11 @@ class LoginPage extends StatelessWidget {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        AppConfig.authToken = data['token'];
+        
+        // Fetch user profile
+        await _fetchUserProfile();
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Login successful")),
         );
@@ -49,6 +54,22 @@ class LoginPage extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Could not connect to server")),
       );
+    }
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/profile'),
+        headers: AppConfig.authHeaders,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        AppConfig.userFullName = data['full_name'] ?? 'User';
+      }
+    } catch (e) {
+      // Silently fail - use default name if profile fetch fails
     }
   }
 

@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:tour_bud/config.dart';
+import 'my_trips.dart';
+import 'widgets/bottom_nav_bar.dart';
 
 class MyWidget extends StatefulWidget {
   const MyWidget({super.key});
@@ -61,9 +65,9 @@ class _MyWidgetState extends State<MyWidget> {
                             fontSize: 14,
                           ),
                         ),
-                        const Text(
-                          "Lara Croft",
-                          style: TextStyle(
+                        Text(
+                          AppConfig.userFullName ?? "User",
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -214,10 +218,10 @@ class _MyWidgetState extends State<MyWidget> {
                         ),
                       ),
                       padding: const EdgeInsets.all(16),
-                      child: const Center(
+                      child: Center(
                         child: Text(
-                          "10:30 AM",
-                          style: TextStyle(
+                          DateFormat('hh:mm a').format(DateTime.now()),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF2D6187),
@@ -297,7 +301,7 @@ class _MyWidgetState extends State<MyWidget> {
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
                 children: [
-                  _quickAccessCard("My Bookings", Icons.calendar_today),
+                  _quickAccessCard("My Trips", Icons.calendar_today),
                   _quickAccessCard("Book New Tours", Icons.add_rounded,
                       bgColor: const Color(0xFF5FA8D3)),
                   _quickAccessCard("Explore", Icons.explore),
@@ -311,73 +315,61 @@ class _MyWidgetState extends State<MyWidget> {
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
+      bottomNavigationBar: CustomBottomNavBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
           });
         },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF2D6187),
-        selectedItemColor: const Color(0xFFEFFAD3),
-        unselectedItemColor: Colors.white70,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.wallet),
-            label: 'Budget',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.image),
-            label: 'Gallery',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.explore),
-            label: 'Explore',
-          ),
-        ],
       ),
     );
   }
 
   Widget _quickAccessCard(String label, IconData icon,
       {Color bgColor = const Color(0xFFEFFAD3)}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFF2D6187),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color: bgColor == const Color(0xFF5FA8D3)
-                ? Colors.white
-                : const Color(0xFF2D6187),
-            size: 32,
+    return GestureDetector(
+      onTap: () {
+        if (label == 'My Trips') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MyTripsPage()),
+          );
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFF2D6187),
+            width: 1.5,
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
               color: bgColor == const Color(0xFF5FA8D3)
                   ? Colors.white
                   : const Color(0xFF2D6187),
+              size: 32,
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: bgColor == const Color(0xFF5FA8D3)
+                    ? Colors.white
+                    : const Color(0xFF2D6187),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
