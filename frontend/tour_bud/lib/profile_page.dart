@@ -42,49 +42,45 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
   bool _obscurePassword = true;
 
   Map<String, dynamic> _originalUserData = {};
+  String _createdAt = '';
 
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _surnameController = TextEditingController();
+  final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _mobileController = TextEditingController();
+  final TextEditingController _contactNumberController = TextEditingController();
+  final TextEditingController _dobController = TextEditingController();
 
   final Map<String, String> _savedValues = {
-    'name': '',
-    'surname': '',
+    'full_name': '',
     'username': '',
-    'email': '',
+    'password': '',
     'contact_number': '',
+    'date_of_birth': '',
   };
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _surnameController.dispose();
+    _fullNameController.dispose();
     _usernameController.dispose();
-    _emailController.dispose();
-    _mobileController.dispose();
+    _contactNumberController.dispose();
+    _dobController.dispose();
     super.dispose();
   }
 
   void _onEditPressed() {
-    _savedValues['name'] = _nameController.text;
-    _savedValues['surname'] = _surnameController.text;
+    _savedValues['full_name'] = _fullNameController.text;
     _savedValues['username'] = _usernameController.text;
-    _savedValues['email'] = _emailController.text;
-    _savedValues['mobile'] = _mobileController.text;
+    _savedValues['contact_number'] = _contactNumberController.text;
+    _savedValues['date_of_birth'] = _dobController.text;
     setState(() => _isEditing = true);
   }
 
   void _onSavePressed() async {
-final fullName = '${_nameController.text} ${_surnameController.text}'.trim();
-  
-  final Map<String, dynamic> updateData = {
-    'full_name': fullName,
-    'username': _usernameController.text.trim(),
-    'email': _emailController.text.trim(),
-    'mobile': _mobileController.text.trim(),
-  };
+    final Map<String, dynamic> updateData = {
+      'full_name': _fullNameController.text.trim(),
+      'username': _usernameController.text.trim(),
+      'contact_number': _contactNumberController.text.trim(),
+      'date_of_birth': _dobController.text.trim(),
+    };
 
   try {
     final response = await http.put(
@@ -120,11 +116,10 @@ final fullName = '${_nameController.text} ${_surnameController.text}'.trim();
   }
 
   void _onCancelPressed() {
-    _nameController.text = _savedValues['name']!;
-    _surnameController.text = _savedValues['surname']!;
+    _fullNameController.text = _savedValues['full_name']!;
     _usernameController.text = _savedValues['username']!;
-    _emailController.text = _savedValues['email']!;
-    _mobileController.text = _savedValues['mobile']!;
+    _contactNumberController.text = _savedValues['contact_number']!;
+    _dobController.text = _savedValues['date_of_birth']!;
     setState(() {
       _isEditing = false;
       _obscurePassword = true;
@@ -152,22 +147,32 @@ Future<void> _fetchUserProfile() async {
       
       // Adjust field names based on your API response
       final fullName = data['full_name'] ?? '';
-      final nameParts = fullName.split(' ');
-      final name = nameParts.isNotEmpty ? nameParts[0] : '';
-      final surname = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-      
-      _nameController.text = name;
-      _surnameController.text = surname;
+      final contactNumber = data['contact_number'] ?? '';
+      final dateOfBirth = data['date_of_birth'] ?? '';
+      final createdAtValue = data['created_at'];
+      String createdAtFormatted = '';
+
+      if (createdAtValue != null) {
+        if (createdAtValue is int) {
+          final createdAtDate = DateTime.fromMillisecondsSinceEpoch(createdAtValue * 1000);
+          createdAtFormatted = '${createdAtDate.year}-${createdAtDate.month.toString().padLeft(2, '0')}-${createdAtDate.day.toString().padLeft(2, '0')}';
+        } else if (createdAtValue is String) {
+          createdAtFormatted = createdAtValue;
+        }
+      }
+
+      _fullNameController.text = fullName;
       _usernameController.text = data['username'] ?? '';
-      _emailController.text = data['email'] ?? '';
-      _mobileController.text = data['mobile'] ?? '';
-      
+      _contactNumberController.text = contactNumber;
+      _dobController.text = dateOfBirth;
+      _createdAt = createdAtFormatted;
+
       // Store original data for cancel functionality
       _originalUserData = {
         'full_name': fullName,
         'username': data['username'],
-        'email': data['email'],
-        'mobile': data['mobile'],
+        'contact_number': contactNumber,
+        'date_of_birth': dateOfBirth,
       };
     } else {
       _showErrorSnackBar('Failed to load profile data');
@@ -186,6 +191,22 @@ void _showErrorSnackBar(String message) {
     ),
   );
 }
+
+  Future<void> _selectDateOfBirth() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _dobController.text.isNotEmpty
+          ? DateTime.tryParse(_dobController.text) ?? DateTime(2000)
+          : DateTime(2000),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+
+    if (pickedDate != null) {
+      _dobController.text =
+          '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -338,16 +359,22 @@ void _showErrorSnackBar(String message) {
                     const SizedBox(height: 28),
 
                     // Form Fields
+                    if (_createdAt.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Text(
+                          'Created at: $_createdAt',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B8FA8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
                     _buildTextField(
-                      label: 'Name',
-                      controller: _nameController,
+                      label: 'Full Name',
+                      controller: _fullNameController,
                       icon: Icons.badge_outlined,
-                      enabled: _isEditing,
-                    ),
-                    _buildTextField(
-                      label: 'Surname',
-                      controller: _surnameController,
-                      icon: Icons.person_outlined,
                       enabled: _isEditing,
                     ),
                     _buildTextField(
@@ -357,18 +384,19 @@ void _showErrorSnackBar(String message) {
                       enabled: _isEditing,
                     ),
                     _buildTextField(
-                      label: 'Email Address',
-                      controller: _emailController,
-                      icon: Icons.mail_outline_rounded,
-                      enabled: _isEditing,
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    _buildTextField(
-                      label: 'Mobile Number',
-                      controller: _mobileController,
+                      label: 'Contact Number',
+                      controller: _contactNumberController,
                       icon: Icons.phone_outlined,
                       enabled: _isEditing,
                       keyboardType: TextInputType.phone,
+                    ),
+                    _buildTextField(
+                      label: 'Date of Birth',
+                      controller: _dobController,
+                      icon: Icons.calendar_today_outlined,
+                      enabled: _isEditing,
+                      readOnly: true,
+                      onTap: _isEditing ? _selectDateOfBirth : null,
                     ),
 
                     const SizedBox(height: 28),
@@ -412,6 +440,8 @@ void _showErrorSnackBar(String message) {
     required IconData icon,
     bool enabled = true,
     bool obscureText = false,
+    bool readOnly = false,
+    VoidCallback? onTap,
     TextInputType keyboardType = TextInputType.text,
   }) {
     return Padding(
@@ -435,8 +465,10 @@ void _showErrorSnackBar(String message) {
         child: TextField(
           controller: controller,
           enabled: enabled,
+          readOnly: readOnly,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          onTap: onTap,
           style: const TextStyle(
             color: navy,
             fontSize: 14.5,
