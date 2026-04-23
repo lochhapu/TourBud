@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:tour_bud/config.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -37,10 +41,11 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
   bool _isEditing = false;
   bool _obscurePassword = true;
 
+  Map<String, dynamic> _originalUserData = {};
+
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
 
@@ -48,9 +53,8 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
     'name': '',
     'surname': '',
     'username': '',
-    'password': '',
     'email': '',
-    'mobile': '',
+    'contact_number': '',
   };
 
   @override
@@ -58,7 +62,6 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
     _nameController.dispose();
     _surnameController.dispose();
     _usernameController.dispose();
-    _passwordController.dispose();
     _emailController.dispose();
     _mobileController.dispose();
     super.dispose();
@@ -68,24 +71,58 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
     _savedValues['name'] = _nameController.text;
     _savedValues['surname'] = _surnameController.text;
     _savedValues['username'] = _usernameController.text;
-    _savedValues['password'] = _passwordController.text;
     _savedValues['email'] = _emailController.text;
     _savedValues['mobile'] = _mobileController.text;
     setState(() => _isEditing = true);
   }
 
-  void _onSavePressed() {
-    setState(() {
-      _isEditing = false;
-      _obscurePassword = true;
-    });
+  void _onSavePressed() async {
+final fullName = '${_nameController.text} ${_surnameController.text}'.trim();
+  
+  final Map<String, dynamic> updateData = {
+    'full_name': fullName,
+    'username': _usernameController.text.trim(),
+    'email': _emailController.text.trim(),
+    'mobile': _mobileController.text.trim(),
+  };
+
+  try {
+    final response = await http.put(
+      Uri.parse('${AppConfig.baseUrl}/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${AppConfig.authToken}',
+      },
+      body: jsonEncode(updateData),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Profile updated successfully!")),
+      );
+      
+      setState(() {
+        _isEditing = false;
+        _obscurePassword = true;
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(data['error'] ?? 'Update failed')),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Could not connect to server")),
+    );
+  }
   }
 
   void _onCancelPressed() {
     _nameController.text = _savedValues['name']!;
     _surnameController.text = _savedValues['surname']!;
     _usernameController.text = _savedValues['username']!;
-    _passwordController.text = _savedValues['password']!;
     _emailController.text = _savedValues['email']!;
     _mobileController.text = _savedValues['mobile']!;
     setState(() {
@@ -93,6 +130,62 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
       _obscurePassword = true;
     });
   }
+
+  @override
+void initState() {
+  super.initState();
+  _fetchUserProfile();
+}
+
+Future<void> _fetchUserProfile() async {
+  try {
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${AppConfig.authToken}',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      
+      // Adjust field names based on your API response
+      final fullName = data['full_name'] ?? '';
+      final nameParts = fullName.split(' ');
+      final name = nameParts.isNotEmpty ? nameParts[0] : '';
+      final surname = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+      
+      _nameController.text = name;
+      _surnameController.text = surname;
+      _usernameController.text = data['username'] ?? '';
+      _emailController.text = data['email'] ?? '';
+      _mobileController.text = data['mobile'] ?? '';
+      
+      // Store original data for cancel functionality
+      _originalUserData = {
+        'full_name': fullName,
+        'username': data['username'],
+        'email': data['email'],
+        'mobile': data['mobile'],
+      };
+    } else {
+      _showErrorSnackBar('Failed to load profile data');
+    }
+  } catch (e) {
+    _showErrorSnackBar('Could not connect to server');
+  }
+}
+
+void _showErrorSnackBar(String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.red,
+      duration: const Duration(seconds: 2),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -263,7 +356,6 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
                       icon: Icons.alternate_email_rounded,
                       enabled: _isEditing,
                     ),
-                    _buildPasswordField(),
                     _buildTextField(
                       label: 'Email Address',
                       controller: _emailController,
@@ -361,67 +453,6 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
               icon,
               color: enabled ? teal : navy.withOpacity(0.3),
               size: 20,
-            ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: _isEditing ? teal.withOpacity(0.6) : Colors.white,
-            width: 1.4,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: navy.withOpacity(0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: TextField(
-          controller: _passwordController,
-          enabled: _isEditing,
-          obscureText: _obscurePassword,
-          style: const TextStyle(
-            color: navy,
-            fontSize: 14.5,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: 'Password',
-            hintStyle: TextStyle(
-              color: navy.withOpacity(0.4),
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-            ),
-            prefixIcon: Icon(
-              Icons.lock_outline_rounded,
-              color: _isEditing ? teal : navy.withOpacity(0.3),
-              size: 20,
-            ),
-            suffixIcon: GestureDetector(
-              onTap: () => setState(() => _obscurePassword = !_obscurePassword),
-              child: Icon(
-                _obscurePassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: _isEditing ? teal : navy.withOpacity(0.3),
-                size: 20,
-              ),
             ),
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(
