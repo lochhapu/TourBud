@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:tour_bud/config.dart';
 import 'package:tour_bud/widgets/bottom_nav_bar.dart';
+import 'package:tour_bud/trip_details.dart';
 import 'dashboard_page.dart';
 
 class Trip {
@@ -464,57 +465,67 @@ class _MyTripsPageState extends State<MyTripsPage> {
   }
 
   Widget _buildTripCard(Trip trip) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFDFF1D8),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF7F9068), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TripDetailsPage(trip: trip),
           ),
-        ],
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            trip.name,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D6187),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFDFF1D8),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFF7F9068), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.calendar_today,
-                  size: 16, color: Color(0xFF2D6187)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${trip.startDate} → ${trip.endDate}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF2D6187),
+          ],
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              trip.name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D6187),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today,
+                    size: 16, color: Color(0xFF2D6187)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${trip.startDate} → ${trip.endDate}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF2D6187),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Budget goal: ${trip.currency} ${trip.budgetGoal?.toStringAsFixed(0) ?? 'N/A'}',
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF2D6187),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Text(
+              'Budget goal: ${trip.currency} ${trip.budgetGoal?.toStringAsFixed(0) ?? 'N/A'}',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF2D6187),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
