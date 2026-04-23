@@ -1594,5 +1594,947 @@ def get_trip_budget_info(trip_id, total_spent, trip_currency):
             "message": "No budget set for this trip"
         }
 
+# ============ LOCATION MANAGEMENT ENDPOINTS ============
+
+@app.route("/trips/<int:trip_id>/locations", methods=["GET"])
+def get_trip_locations(trip_id):
+    """
+    Get all locations for a specific trip.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: List of locations with their todos
+        - 401: Unauthorized
+        - 403: Forbidden
+        - 404: Trip not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify trip belongs to user
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT id FROM trips WHERE id = ? AND user_id = ?",
+        (trip_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Trip not found"}), 404
+    
+    # Get all locations for the trip
+    cursor.execute(
+        """
+        SELECT * FROM locations 
+        WHERE trip_id = ? 
+        ORDER BY arrival_date ASC
+        """,
+        (trip_id,)
+    )
+    
+    locations = cursor.fetchall()
+    
+    # Get todos for each location
+    locations_list = []
+    for location in locations:
+        cursor.execute(
+            """
+            SELECT * FROM todos 
+            WHERE location_id = ? 
+            ORDER BY due_date ASC, created_at ASC
+            """,
+            (location["id"],)
+        )
+        todos = cursor.fetchall()
+        
+        todos_list = []
+        for todo in todos:
+            todos_list.append({
+                "id": todo["id"],
+                "description": todo["description"],
+                "is_completed": bool(todo["is_completed"]),
+                "category": todo["category"],
+                "due_date": todo["due_date"],
+                "created_at": todo["created_at"],
+                "updated_at": todo["updated_at"]
+            })
+        
+        # Calculate days at location
+        arrival = time.strptime(location["arrival_date"], "%Y-%m-%d")
+        departure = time.strptime(location["departure_date"], "%Y-%m-%d")
+        days_staying = int((time.mktime(departure) - time.mktime(arrival)) / (24 * 60 * 60)) + 1
+        
+        locations_list.append({
+            "id": location["id"],
+            "place_name": location["place_name"],
+            "arrival_date": location["arrival_date"],
+            "departure_date": location["departure_date"],
+            "days_staying": days_staying,
+            "notes": location["notes"],
+            "created_at": location["created_at"],
+            "updated_at": location["updated_at"],
+            "todos": todos_list,
+            "todos_count": len(todos_list),
+            "completed_todos": sum(1 for todo in todos_list if todo["is_completed"])
+        })
+    
+    conn.close()
+    
+    return jsonify({
+        "trip_id": trip_id,
+        "locations": locations_list,
+        "count": len(locations_list)
+    }), 200
+
+
+@app.route("/trips/<int:trip_id>/locations", methods=["POST"])
+def add_location(trip_id):
+    """
+    Add a new location to a trip.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected JSON:
+    {
+        "place_name": str (required),
+        "arrival_date": str (required, YYYY-MM-DD),
+        "departure_date": str (required, YYYY-MM-DD),
+        "notes": str (optional)
+    }
+    
+    Returns:
+        - 201: Location created
+        - 400: Invalid data
+        - 401: Unauthorized
+        - 404: Trip not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify trip belongs to user
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "SELECT id, start_date, end_date FROM trips WHERE id = ? AND user_id = ?",
+        (trip_id, user_id)
+    )
+    
+    trip = cursor.fetchone()
+    if trip is None:
+        conn.close()
+        return jsonify({"error": "Trip not found"}), 404
+    
+    # Validate request
+    if not request.is_json:
+        conn.close()
+        return jsonify({"error": "Request must be JSON"}), 415
+    
+    data = request.get_json()
+    if not data:
+        conn.close()
+        return jsonify({"error": "No data provided"}), 400
+    
+    # Required fields
+    required_fields = ["place_name", "arrival_date", "departure_date"]
+    for field in required_fields:
+        if field not in data:
+            conn.close()
+            return jsonify({"error": f"Missing required field: {field}"}), 400
+    
+    place_name = data["place_name"]
+    arrival_date = data["arrival_date"]
+    departure_date = data["departure_date"]
+    notes = data.get("notes", "")
+    
+    # Validate place_name
+    if not isinstance(place_name, str) or not place_name.strip():
+        conn.close()
+        return jsonify({"error": "place_name must be a non-empty string"}), 400
+    
+    # Validate dates
+    try:
+        time.strptime(arrival_date, "%Y-%m-%d")
+        time.strptime(departure_date, "%Y-%m-%d")
+    except ValueError:
+        conn.close()
+        return jsonify({"error": "Dates must be in YYYY-MM-DD format"}), 400
+    
+    # Validate date range
+    if arrival_date > departure_date:
+        conn.close()
+        return jsonify({"error": "arrival_date must be before or equal to departure_date"}), 400
+    
+    # Check if location dates are within trip dates
+    if arrival_date < trip["start_date"] or departure_date > trip["end_date"]:
+        conn.close()
+        return jsonify({"error": "Location dates must be within trip date range"}), 400
+    
+    # Insert location
+    try:
+        cursor.execute(
+            """
+            INSERT INTO locations (trip_id, place_name, arrival_date, departure_date, notes)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (trip_id, place_name.strip(), arrival_date, departure_date, notes)
+        )
+        conn.commit()
+        
+        # Get the created location
+        location_id = cursor.lastrowid
+        cursor.execute("SELECT * FROM locations WHERE id = ?", (location_id,))
+        new_location = cursor.fetchone()
+        conn.close()
+        
+        return jsonify({
+            "message": "Location added successfully",
+            "location": {
+                "id": new_location["id"],
+                "place_name": new_location["place_name"],
+                "arrival_date": new_location["arrival_date"],
+                "departure_date": new_location["departure_date"],
+                "notes": new_location["notes"],
+                "created_at": new_location["created_at"]
+            }
+        }), 201
+        
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/trips/<int:trip_id>/locations/<int:location_id>", methods=["PUT"])
+def update_location(trip_id, location_id):
+    """
+    Update an existing location.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected JSON (all fields optional):
+    {
+        "place_name": str (optional),
+        "arrival_date": str (optional, YYYY-MM-DD),
+        "departure_date": str (optional, YYYY-MM-DD),
+        "notes": str (optional)
+    }
+    
+    Returns:
+        - 200: Location updated
+        - 400: Invalid data
+        - 401: Unauthorized
+        - 404: Location not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify location belongs to user's trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT l.*, t.start_date, t.end_date FROM locations l
+        JOIN trips t ON l.trip_id = t.id
+        WHERE l.id = ? AND l.trip_id = ? AND t.user_id = ?
+        """,
+        (location_id, trip_id, user_id)
+    )
+    
+    existing_location = cursor.fetchone()
+    if existing_location is None:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    
+    # Validate request
+    if not request.is_json:
+        conn.close()
+        return jsonify({"error": "Request must be JSON"}), 415
+    
+    data = request.get_json()
+    if not data:
+        conn.close()
+        return jsonify({"error": "No data provided"}), 400
+    
+    # Build update query
+    updates = []
+    values = []
+    
+    if "place_name" in data:
+        if not isinstance(data["place_name"], str) or not data["place_name"].strip():
+            conn.close()
+            return jsonify({"error": "place_name must be a non-empty string"}), 400
+        updates.append("place_name = ?")
+        values.append(data["place_name"].strip())
+    
+    if "arrival_date" in data:
+        try:
+            time.strptime(data["arrival_date"], "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "arrival_date must be in YYYY-MM-DD format"}), 400
+        updates.append("arrival_date = ?")
+        values.append(data["arrival_date"])
+    
+    if "departure_date" in data:
+        try:
+            time.strptime(data["departure_date"], "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "departure_date must be in YYYY-MM-DD format"}), 400
+        updates.append("departure_date = ?")
+        values.append(data["departure_date"])
+    
+    if "notes" in data:
+        updates.append("notes = ?")
+        values.append(data["notes"] if data["notes"] else None)
+    
+    if not updates:
+        conn.close()
+        return jsonify({"error": "No valid fields to update"}), 400
+    
+    # Validate date consistency if both dates are being updated
+    new_arrival = data.get("arrival_date", existing_location["arrival_date"])
+    new_departure = data.get("departure_date", existing_location["departure_date"])
+    
+    if new_arrival > new_departure:
+        conn.close()
+        return jsonify({"error": "arrival_date must be before or equal to departure_date"}), 400
+    
+    # Check if dates are within trip bounds
+    if new_arrival < existing_location["start_date"] or new_departure > existing_location["end_date"]:
+        conn.close()
+        return jsonify({"error": "Location dates must be within trip date range"}), 400
+    
+    # Execute update
+    values.append(location_id)
+    query = f"UPDATE locations SET {', '.join(updates)} WHERE id = ?"
+    
+    try:
+        cursor.execute(query, values)
+        conn.commit()
+        
+        # Get updated location
+        cursor.execute("SELECT * FROM locations WHERE id = ?", (location_id,))
+        updated_location = cursor.fetchone()
+        conn.close()
+        
+        return jsonify({
+            "message": "Location updated successfully",
+            "location": {
+                "id": updated_location["id"],
+                "place_name": updated_location["place_name"],
+                "arrival_date": updated_location["arrival_date"],
+                "departure_date": updated_location["departure_date"],
+                "notes": updated_location["notes"]
+            }
+        }), 200
+        
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/trips/<int:trip_id>/locations/<int:location_id>", methods=["DELETE"])
+def delete_location(trip_id, location_id):
+    """
+    Delete a location (cascades to all associated todos).
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: Location deleted
+        - 401: Unauthorized
+        - 404: Location not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify location belongs to user's trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT l.id FROM locations l
+        JOIN trips t ON l.trip_id = t.id
+        WHERE l.id = ? AND l.trip_id = ? AND t.user_id = ?
+        """,
+        (location_id, trip_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    
+    # Delete location (todos will cascade)
+    cursor.execute("DELETE FROM locations WHERE id = ?", (location_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "Location deleted successfully"}), 200
+
+# ============ TODO MANAGEMENT ENDPOINTS ============
+
+# Helper function to validate todo category
+def validate_todo_category(category):
+    """Validate todo category"""
+    valid_categories = ['sightseeing', 'food', 'transport', 'accommodation', 'packing', 'booking', 'other']
+    return category.lower() in valid_categories
+
+@app.route("/locations/<int:location_id>/todos", methods=["GET"])
+def get_location_todos(location_id):
+    """
+    Get all todos for a specific location.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Optional query parameters:
+    - completed: 'true' or 'false' to filter by completion status
+    - category: filter by category
+    
+    Returns:
+        - 200: List of todos
+        - 401: Unauthorized
+        - 404: Location not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify location belongs to user's trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT l.id FROM locations l
+        JOIN trips t ON l.trip_id = t.id
+        WHERE l.id = ? AND t.user_id = ?
+        """,
+        (location_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    
+    # Build query with filters
+    query = "SELECT * FROM todos WHERE location_id = ?"
+    params = [location_id]
+    
+    # Filter by completion status
+    completed_filter = request.args.get('completed')
+    if completed_filter is not None:
+        if completed_filter.lower() == 'true':
+            query += " AND is_completed = 1"
+        elif completed_filter.lower() == 'false':
+            query += " AND is_completed = 0"
+    
+    # Filter by category
+    category = request.args.get('category')
+    if category:
+        if validate_todo_category(category):
+            query += " AND category = ?"
+            params.append(category.lower())
+        else:
+            conn.close()
+            return jsonify({"error": "Invalid category. Valid categories: sightseeing, food, transport, accommodation, packing, booking, other"}), 400
+    
+    query += " ORDER BY due_date ASC, created_at ASC"
+    
+    cursor.execute(query, params)
+    todos = cursor.fetchall()
+    conn.close()
+    
+    todos_list = []
+    for todo in todos:
+        todos_list.append({
+            "id": todo["id"],
+            "description": todo["description"],
+            "is_completed": bool(todo["is_completed"]),
+            "category": todo["category"],
+            "due_date": todo["due_date"],
+            "created_at": todo["created_at"],
+            "updated_at": todo["updated_at"]
+        })
+    
+    return jsonify({
+        "location_id": location_id,
+        "todos": todos_list,
+        "count": len(todos_list),
+        "completed_count": sum(1 for todo in todos_list if todo["is_completed"])
+    }), 200
+
+
+@app.route("/locations/<int:location_id>/todos", methods=["POST"])
+def add_todo(location_id):
+    """
+    Add a new todo to a location.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected JSON:
+    {
+        "description": str (required),
+        "category": str (optional, default 'other'),
+        "due_date": str (optional, YYYY-MM-DD)
+    }
+    
+    Returns:
+        - 201: Todo created
+        - 400: Invalid data
+        - 401: Unauthorized
+        - 404: Location not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify location belongs to user's trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT l.id, l.arrival_date, l.departure_date FROM locations l
+        JOIN trips t ON l.trip_id = t.id
+        WHERE l.id = ? AND t.user_id = ?
+        """,
+        (location_id, user_id)
+    )
+    
+    location = cursor.fetchone()
+    if location is None:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    
+    # Validate request
+    if not request.is_json:
+        conn.close()
+        return jsonify({"error": "Request must be JSON"}), 415
+    
+    data = request.get_json()
+    if not data:
+        conn.close()
+        return jsonify({"error": "No data provided"}), 400
+    
+    # Required fields
+    if "description" not in data:
+        conn.close()
+        return jsonify({"error": "description is required"}), 400
+    
+    description = data["description"]
+    category = data.get("category", "other")
+    due_date = data.get("due_date")
+    
+    # Validate description
+    if not isinstance(description, str) or not description.strip():
+        conn.close()
+        return jsonify({"error": "description must be a non-empty string"}), 400
+    
+    # Validate category
+    if not validate_todo_category(category):
+        conn.close()
+        return jsonify({"error": "Invalid category. Valid categories: sightseeing, food, transport, accommodation, packing, booking, other"}), 400
+    
+    # Validate due date if provided
+    if due_date:
+        try:
+            time.strptime(due_date, "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "due_date must be in YYYY-MM-DD format"}), 400
+        
+        # Check if due date is within location date range
+        if due_date < location["arrival_date"] or due_date > location["departure_date"]:
+            conn.close()
+            return jsonify({"error": "due_date must be within location date range"}), 400
+    
+    # Insert todo
+    try:
+        cursor.execute(
+            """
+            INSERT INTO todos (location_id, description, category, due_date)
+            VALUES (?, ?, ?, ?)
+            """,
+            (location_id, description.strip(), category.lower(), due_date)
+        )
+        conn.commit()
+        
+        # Get the created todo
+        todo_id = cursor.lastrowid
+        cursor.execute("SELECT * FROM todos WHERE id = ?", (todo_id,))
+        new_todo = cursor.fetchone()
+        conn.close()
+        
+        return jsonify({
+            "message": "Todo added successfully",
+            "todo": {
+                "id": new_todo["id"],
+                "description": new_todo["description"],
+                "is_completed": bool(new_todo["is_completed"]),
+                "category": new_todo["category"],
+                "due_date": new_todo["due_date"],
+                "created_at": new_todo["created_at"]
+            }
+        }), 201
+        
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/todos/<int:todo_id>", methods=["PUT"])
+def update_todo(todo_id):
+    """
+    Update an existing todo.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected JSON (all fields optional):
+    {
+        "description": str (optional),
+        "is_completed": bool (optional),
+        "category": str (optional),
+        "due_date": str (optional, YYYY-MM-DD)
+    }
+    
+    Returns:
+        - 200: Todo updated
+        - 400: Invalid data
+        - 401: Unauthorized
+        - 404: Todo not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify todo belongs to user's location and trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT t.*, l.arrival_date, l.departure_date FROM todos t
+        JOIN locations l ON t.location_id = l.id
+        JOIN trips tr ON l.trip_id = tr.id
+        WHERE t.id = ? AND tr.user_id = ?
+        """,
+        (todo_id, user_id)
+    )
+    
+    existing_todo = cursor.fetchone()
+    if existing_todo is None:
+        conn.close()
+        return jsonify({"error": "Todo not found"}), 404
+    
+    # Validate request
+    if not request.is_json:
+        conn.close()
+        return jsonify({"error": "Request must be JSON"}), 415
+    
+    data = request.get_json()
+    if not data:
+        conn.close()
+        return jsonify({"error": "No data provided"}), 400
+    
+    # Build update query
+    updates = []
+    values = []
+    
+    if "description" in data:
+        if not isinstance(data["description"], str) or not data["description"].strip():
+            conn.close()
+            return jsonify({"error": "description must be a non-empty string"}), 400
+        updates.append("description = ?")
+        values.append(data["description"].strip())
+    
+    if "is_completed" in data:
+        if not isinstance(data["is_completed"], bool):
+            conn.close()
+            return jsonify({"error": "is_completed must be a boolean"}), 400
+        updates.append("is_completed = ?")
+        values.append(1 if data["is_completed"] else 0)
+    
+    if "category" in data:
+        if not validate_todo_category(data["category"]):
+            conn.close()
+            return jsonify({"error": "Invalid category. Valid categories: sightseeing, food, transport, accommodation, packing, booking, other"}), 400
+        updates.append("category = ?")
+        values.append(data["category"].lower())
+    
+    if "due_date" in data:
+        if data["due_date"] is not None:
+            try:
+                time.strptime(data["due_date"], "%Y-%m-%d")
+            except ValueError:
+                conn.close()
+                return jsonify({"error": "due_date must be in YYYY-MM-DD format"}), 400
+            
+            # Check if due date is within location date range
+            if data["due_date"] < existing_todo["arrival_date"] or data["due_date"] > existing_todo["departure_date"]:
+                conn.close()
+                return jsonify({"error": "due_date must be within location date range"}), 400
+        updates.append("due_date = ?")
+        values.append(data["due_date"])
+    
+    if not updates:
+        conn.close()
+        return jsonify({"error": "No valid fields to update"}), 400
+    
+    # Execute update
+    values.append(todo_id)
+    query = f"UPDATE todos SET {', '.join(updates)} WHERE id = ?"
+    
+    try:
+        cursor.execute(query, values)
+        conn.commit()
+        
+        # Get updated todo
+        cursor.execute("SELECT * FROM todos WHERE id = ?", (todo_id,))
+        updated_todo = cursor.fetchone()
+        conn.close()
+        
+        return jsonify({
+            "message": "Todo updated successfully",
+            "todo": {
+                "id": updated_todo["id"],
+                "description": updated_todo["description"],
+                "is_completed": bool(updated_todo["is_completed"]),
+                "category": updated_todo["category"],
+                "due_date": updated_todo["due_date"]
+            }
+        }), 200
+        
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/todos/<int:todo_id>", methods=["DELETE"])
+def delete_todo(todo_id):
+    """
+    Delete a todo.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: Todo deleted
+        - 401: Unauthorized
+        - 404: Todo not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify todo belongs to user's location and trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT t.id FROM todos t
+        JOIN locations l ON t.location_id = l.id
+        JOIN trips tr ON l.trip_id = tr.id
+        WHERE t.id = ? AND tr.user_id = ?
+        """,
+        (todo_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Todo not found"}), 404
+    
+    # Delete todo
+    cursor.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "Todo deleted successfully"}), 200
+
+
+@app.route("/todos/<int:todo_id>/complete", methods=["PATCH"])
+def complete_todo(todo_id):
+    """
+    Mark a todo as completed (convenience endpoint).
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: Todo marked as completed
+        - 401: Unauthorized
+        - 404: Todo not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify todo belongs to user
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT t.id FROM todos t
+        JOIN locations l ON t.location_id = l.id
+        JOIN trips tr ON l.trip_id = tr.id
+        WHERE t.id = ? AND tr.user_id = ?
+        """,
+        (todo_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Todo not found"}), 404
+    
+    # Mark as completed
+    cursor.execute(
+        "UPDATE todos SET is_completed = 1 WHERE id = ?",
+        (todo_id,)
+    )
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        "message": "Todo marked as completed",
+        "todo_id": todo_id
+    }), 200
+
+
+@app.route("/todos/<int:todo_id>/incomplete", methods=["PATCH"])
+def incomplete_todo(todo_id):
+    """
+    Mark a todo as incomplete (convenience endpoint).
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: Todo marked as incomplete
+        - 401: Unauthorized
+        - 404: Todo not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify todo belongs to user
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT t.id FROM todos t
+        JOIN locations l ON t.location_id = l.id
+        JOIN trips tr ON l.trip_id = tr.id
+        WHERE t.id = ? AND tr.user_id = ?
+        """,
+        (todo_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Todo not found"}), 404
+    
+    # Mark as incomplete
+    cursor.execute(
+        "UPDATE todos SET is_completed = 0 WHERE id = ?",
+        (todo_id,)
+    )
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        "message": "Todo marked as incomplete",
+        "todo_id": todo_id
+    }), 200
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

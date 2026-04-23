@@ -1,10 +1,9 @@
 def api_info():
     return """
-      
-          <!DOCTYPE html>
+        <!DOCTYPE html>
     <html>
     <head>
-        <title>🌍 TourBud API - Your Travel Companion</title>
+        <title>🌍 TourBud API - Your Complete Travel Companion</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
@@ -178,6 +177,10 @@ def api_info():
                 opacity: 0.9;
             }
             
+            .todo-category-card {
+                background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            }
+            
             .note {
                 background: #fefcbf;
                 border-left: 4px solid #ecc94b;
@@ -189,6 +192,11 @@ def api_info():
             .success-note {
                 background: #c6f6d5;
                 border-left-color: #48bb78;
+            }
+            
+            .info-note {
+                background: #bee3f8;
+                border-left-color: #4299e1;
             }
             
             .stats {
@@ -231,8 +239,8 @@ def api_info():
         <div class="container">
             <div class="header">
                 <h1>🌍 TourBud API</h1>
-                <p><strong>Your complete travel companion for planning adventures, managing budgets, tracking expenses, and connecting with fellow explorers!</strong></p>
-                <span class="version">Version 3.0.0</span>
+                <p><strong>Your complete travel companion for planning adventures, managing budgets, tracking expenses, organizing locations, and ticking off todos!</strong></p>
+                <span class="version">Version 4.0.0</span>
                 <span class="status">🚀 Operational</span>
             </div>
             
@@ -258,6 +266,16 @@ def api_info():
                     <p>Complete expense management with categories</p>
                 </div>
                 <div class="card">
+                    <h3>🗺️</h3>
+                    <h3>Locations</h3>
+                    <p>Plan your itinerary with multiple destinations</p>
+                </div>
+                <div class="card">
+                    <h3>✅</h3>
+                    <h3>Todos</h3>
+                    <p>Stay organized with task management</p>
+                </div>
+                <div class="card">
                     <h3>👤</h3>
                     <h3>Profile</h3>
                     <p>Complete user profile management</p>
@@ -271,11 +289,11 @@ def api_info():
             
             <div class="stats">
                 <div class="stat-box">
-                    <div class="stat-number">18</div>
+                    <div class="stat-number">24</div>
                     <div>Total Endpoints</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-number">15</div>
+                    <div class="stat-number">21</div>
                     <div>Authenticated Endpoints</div>
                 </div>
                 <div class="stat-box">
@@ -285,6 +303,10 @@ def api_info():
                 <div class="stat-box">
                     <div class="stat-number">6</div>
                     <div>Expense Categories</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">7</div>
+                    <div>Todo Categories</div>
                 </div>
             </div>
             
@@ -305,19 +327,31 @@ def api_info():
                     curl -X POST http://localhost:5000/trips \<br>
                     &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE" \<br>
                     &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
-                    &nbsp;&nbsp;-d '{"trip_name": "Summer Adventure", "start_date": "2024-06-01", "end_date": "2024-06-10", "budget_goal": 1000}'<br><br>
+                    &nbsp;&nbsp;-d '{"trip_name": "European Adventure", "start_date": "2024-06-01", "end_date": "2024-06-15", "budget_goal": 3000}'<br><br>
                     
-                    # 4. Add an expense<br>
+                    # 4. Add a location<br>
+                    curl -X POST http://localhost:5000/trips/1/locations \<br>
+                    &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE" \<br>
+                    &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+                    &nbsp;&nbsp;-d '{"place_name": "Paris", "arrival_date": "2024-06-01", "departure_date": "2024-06-05", "notes": "Eiffel Tower, Louvre"}'<br><br>
+                    
+                    # 5. Add a todo<br>
+                    curl -X POST http://localhost:5000/locations/1/todos \<br>
+                    &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE" \<br>
+                    &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+                    &nbsp;&nbsp;-d '{"description": "Visit Eiffel Tower", "category": "sightseeing", "due_date": "2024-06-02"}'<br><br>
+                    
+                    # 6. Add an expense<br>
                     curl -X POST http://localhost:5000/trips/1/expenses \<br>
                     &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE" \<br>
                     &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
-                    &nbsp;&nbsp;-d '{"amount": 45.50, "category": "food", "description": "Lunch at cafe"}'<br><br>
+                    &nbsp;&nbsp;-d '{"amount": 89.50, "category": "food", "description": "Dinner in Paris"}'<br><br>
                     
-                    # 5. View expense summary<br>
-                    curl -X GET http://localhost:5000/trips/1/expenses/summary \<br>
+                    # 7. View your complete trip plan<br>
+                    curl -X GET http://localhost:5000/trips/1/locations \<br>
                     &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE"<br><br>
                     
-                    # 6. Logout<br>
+                    # 8. Logout<br>
                     curl -X POST http://localhost:5000/logout \<br>
                     &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE"
                 </div>
@@ -397,7 +431,75 @@ def api_info():
                 <div class="endpoint">
                     <span class="method delete">DELETE</span>
                     <span class="path">/trips/&lt;trip_id&gt;</span>
-                    <p>Delete a trip (cascades to all expenses)</p>
+                    <p>Delete a trip (cascades to all locations, todos, and expenses)</p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🗺️ Location Management Endpoints</h2>
+                
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/trips/&lt;trip_id&gt;/locations</span>
+                    <p>Get all locations for a trip with their todos and stay duration</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/trips/&lt;trip_id&gt;/locations</span>
+                    <p>Add a new location to a trip (place_name, arrival_date, departure_date required)</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/trips/&lt;trip_id&gt;/locations/&lt;location_id&gt;</span>
+                    <p>Update an existing location</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/trips/&lt;trip_id&gt;/locations/&lt;location_id&gt;</span>
+                    <p>Delete a location (cascades to all associated todos)</p>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>✅ Todo Management Endpoints</h2>
+                
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/locations/&lt;location_id&gt;/todos</span>
+                    <p>Get all todos for a location (filter by ?completed=true/false, ?category=)</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/locations/&lt;location_id&gt;/todos</span>
+                    <p>Add a new todo (description required, category optional, due_date optional)</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/todos/&lt;todo_id&gt;</span>
+                    <p>Update an existing todo (all fields optional)</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/todos/&lt;todo_id&gt;</span>
+                    <p>Delete a todo</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method patch">PATCH</span>
+                    <span class="path">/todos/&lt;todo_id&gt;/complete</span>
+                    <p>Mark a todo as completed (convenience endpoint)</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method patch">PATCH</span>
+                    <span class="path">/todos/&lt;todo_id&gt;/incomplete</span>
+                    <p>Mark a todo as incomplete (convenience endpoint)</p>
                 </div>
             </div>
             
@@ -465,14 +567,61 @@ def api_info():
                 </div>
             </div>
             
+            <div class="section">
+                <h2>✅ Todo Categories</h2>
+                <div class="category-grid">
+                    <div class="category-card todo-category-card">
+                        <h4>🏛️ Sightseeing</h4>
+                        <p>Attractions, landmarks, museums</p>
+                    </div>
+                    <div class="category-card todo-category-card">
+                        <h4>🍽️ Food</h4>
+                        <p>Restaurants, food tours, reservations</p>
+                    </div>
+                    <div class="category-card todo-category-card">
+                        <h4>🚆 Transport</h4>
+                        <p>Tickets, bookings, schedules</p>
+                    </div>
+                    <div class="category-card todo-category-card">
+                        <h4>🏠 Accommodation</h4>
+                        <p>Check-in, check-out, special requests</p>
+                    </div>
+                    <div class="category-card todo-category-card">
+                        <h4>🎒 Packing</h4>
+                        <p>Items to pack, shopping list</p>
+                    </div>
+                    <div class="category-card todo-category-card">
+                        <h4>📅 Booking</h4>
+                        <p>Reservations, tickets, confirmations</p>
+                    </div>
+                    <div class="category-card todo-category-card">
+                        <h4>📦 Other</h4>
+                        <p>Miscellaneous tasks</p>
+                    </div>
+                </div>
+            </div>
+            
             <div class="note success-note">
-                <strong>🎯 Budget Tracking Features:</strong>
+                <strong>🎯 Key Features:</strong>
                 <ul style="margin-top: 10px; margin-left: 20px;">
-                    <li>✅ Automatic budget vs. spent calculation</li>
-                    <li>✅ Real-time budget status: <span style="color:#48bb78;">Good</span> (&lt;90%), <span style="color:#ed8936;">Warning</span> (90-100%), <span style="color:#f56565;">Over Budget</span> (&gt;100%)</li>
+                    <li>✅ Complete trip planning from start to finish</li>
+                    <li>✅ Location-based itinerary with stay duration calculation</li>
+                    <li>✅ Todo management with 7 categories and due dates</li>
+                    <li>✅ Automatic budget vs. spent calculation with real-time status</li>
+                    <li>✅ Expense tracking with category breakdown and percentages</li>
                     <li>✅ Daily average spending based on trip duration</li>
-                    <li>✅ Category breakdown with percentages</li>
                     <li>✅ Multi-currency support (USD, EUR, GBP, etc.)</li>
+                    <li>✅ Cascade deletions (trip → locations → todos)</li>
+                </ul>
+            </div>
+            
+            <div class="note info-note">
+                <strong>🔗 Data Hierarchy:</strong>
+                <ul style="margin-top: 10px; margin-left: 20px;">
+                    <li>👤 User → ✈️ Trips → 🗺️ Locations → ✅ Todos</li>
+                    <li>👤 User → ✈️ Trips → 💸 Expenses</li>
+                    <li>Deleting a trip removes all associated locations, todos, and expenses</li>
+                    <li>Deleting a location removes all associated todos</li>
                 </ul>
             </div>
             
@@ -485,27 +634,29 @@ def api_info():
                     <li>💱 Budget currency uses 3-letter ISO codes (USD, EUR, GBP, etc.)</li>
                     <li>📅 All dates must be in YYYY-MM-DD format</li>
                     <li>💰 Expenses automatically update trip budget tracking</li>
+                    <li>🗺️ Location dates must be within trip date range</li>
+                    <li>✅ Todo due dates must be within location date range</li>
                     <li>🔑 Include your token in requests: <code>Authorization: Bearer &lt;your-token-here&gt;</code></li>
-                    <li>🗑️ Deleting a trip automatically deletes all associated expenses</li>
                 </ul>
             </div>
             
             <div class="note" style="background: #e6fffa; border-left-color: #38b2ac;">
                 <strong>🚀 Features Coming Soon:</strong>
                 <ul style="margin-top: 10px; margin-left: 20px;">
-                    <li>📝 Itinerary planning with daily activities</li>
-                    <li>💸 Expense splitting between travel buddies</li>
+                    <li>📸 Photo uploads for trips, locations, and expenses</li>
                     <li>👥 Travel buddy matching and connections</li>
-                    <li>📸 Photo uploads for trips and expenses</li>
+                    <li>💬 Chat and messaging between travel buddies</li>
+                    <li>💸 Expense splitting between group members</li>
                     <li>⭐ Place reviews and recommendations</li>
-                    <li>📊 Advanced analytics and spending insights</li>
                     <li>🌐 Real-time currency conversion</li>
+                    <li>📱 Mobile app with offline support</li>
+                    <li>🗺️ Interactive maps for locations</li>
                 </ul>
             </div>
             
             <div class="footer">
                 <p>🌟 Happy travels with TourBud! 🌟</p>
-                <p><small>Check the source code or README for complete documentation</small></p>
+                <p><small>Complete travel planning solution - Version 4.0.0</small></p>
                 <p><small>Made with ❤️ for travelers around the world</small></p>
             </div>
         </div>

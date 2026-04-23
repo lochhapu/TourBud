@@ -88,3 +88,64 @@ END;
 
 -- Predefined categories (for reference)
 -- 'accommodation', 'transportation', 'food', 'activities', 'shopping', 'other'
+
+------------------------
+-- Location Management --
+------------------------
+
+CREATE TABLE locations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trip_id INTEGER NOT NULL,
+    place_name TEXT NOT NULL,
+    arrival_date TEXT NOT NULL, -- YYYY-MM-DD format
+    departure_date TEXT NOT NULL, -- YYYY-MM-DD format
+    notes TEXT,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE
+);
+
+-- Create indexes for faster queries
+CREATE INDEX idx_locations_trip_id ON locations(trip_id);
+CREATE INDEX idx_locations_dates ON locations(arrival_date, departure_date);
+
+-- Trigger to automatically update updated_at timestamp
+CREATE TRIGGER update_locations_timestamp 
+AFTER UPDATE ON locations
+BEGIN
+    UPDATE locations SET updated_at = strftime('%s','now') 
+    WHERE id = NEW.id;
+END;
+
+------------------------
+-- Todo Management --
+------------------------
+
+CREATE TABLE todos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_id INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    is_completed INTEGER NOT NULL DEFAULT 0, -- 0 = false, 1 = true
+    category TEXT NOT NULL DEFAULT 'other',
+    due_date TEXT, -- YYYY-MM-DD format (optional)
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+);
+
+-- Create indexes for faster queries
+CREATE INDEX idx_todos_location_id ON todos(location_id);
+CREATE INDEX idx_todos_completed ON todos(is_completed);
+CREATE INDEX idx_todos_category ON todos(category);
+CREATE INDEX idx_todos_due_date ON todos(due_date);
+
+-- Trigger to automatically update updated_at timestamp
+CREATE TRIGGER update_todos_timestamp 
+AFTER UPDATE ON todos
+BEGIN
+    UPDATE todos SET updated_at = strftime('%s','now') 
+    WHERE id = NEW.id;
+END;
+
+-- Predefined todo categories (for reference)
+-- 'sightseeing', 'food', 'transport', 'accommodation', 'packing', 'booking', 'other'
