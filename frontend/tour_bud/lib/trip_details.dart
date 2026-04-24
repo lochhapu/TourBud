@@ -20,6 +20,16 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
   static const Color sage = Color(0xFFA8DDA8);
   static const Color darkSage = Color(0xFF7F9068);
 
+  final TextEditingController _placeNameController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  DateTime? _locationArrivalDate;
+  DateTime? _locationDepartureDate;
+
+  void dispose(){
+    _placeNameController.dispose();
+    _notesController.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -149,7 +159,8 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
 
                         // Add New Location Button
                         GestureDetector(
-                          onTap: () {},
+                          onTap: () => _showAddLocationDialog(),
+                      
                           child: Container(
                             height: 48,
                             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -208,6 +219,244 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
       ),
     );
   }
+
+  void _showAddLocationDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        backgroundColor: const Color(0xFFEFFAD3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Add Location',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2D6187),
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Place Name
+              TextField(
+                controller: _placeNameController,
+                decoration: InputDecoration(
+                  hintText: 'Place Name',
+                  filled: true,
+                  fillColor: const Color(0xFFDFF1D8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF7F9068),
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+ 
+              // Arrival & Departure Date Row
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) {
+                          setDialogState(() {
+                            _locationArrivalDate = picked;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDFF1D8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF7F9068),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          _locationArrivalDate == null
+                              ? 'Arrival Date'
+                              : _locationArrivalDate.toString().split(' ')[0],
+                          style: TextStyle(
+                            color: _locationArrivalDate == null
+                                ? Colors.grey[600]
+                                : const Color(0xFF2D6187),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate:
+                              _locationArrivalDate ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) {
+                          setDialogState(() {
+                            _locationDepartureDate = picked;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDFF1D8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF7F9068),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          _locationDepartureDate == null
+                              ? 'Departure Date'
+                              : _locationDepartureDate
+                                  .toString()
+                                  .split(' ')[0],
+                          style: TextStyle(
+                            color: _locationDepartureDate == null
+                                ? Colors.grey[600]
+                                : const Color(0xFF2D6187),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+ 
+              // Notes (optional)
+              TextField(
+                controller: _notesController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Notes (optional)',
+                  filled: true,
+                  fillColor: const Color(0xFFDFF1D8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF7F9068),
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // Clear fields on cancel
+              _placeNameController.clear();
+              _notesController.clear();
+              setState(() {
+                _locationArrivalDate = null;
+                _locationDepartureDate = null;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF2D6187)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => _saveLocation(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7F9068),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _saveLocation() {
+  final placeName = _placeNameController.text.trim();
+ 
+  // Validation
+  if (placeName.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please enter a place name.')),
+    );
+    return;
+  }
+  if (_locationArrivalDate == null || _locationDepartureDate == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please select arrival and departure dates.')),
+    );
+    return;
+  }
+  if (_locationDepartureDate!.isBefore(_locationArrivalDate!)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+          content: Text('Departure date must be after arrival date.')),
+    );
+    return;
+  }
+ 
+  // TODO: Call your DB helper to insert into the locations table:
+  //
+  // await dbHelper.insertLocation({
+  //   'trip_id': widget.trip.id,
+  //   'place_name': placeName,
+  //   'arrival_date': _locationArrivalDate!.toIso8601String().split('T')[0],
+  //   'departure_date': _locationDepartureDate!.toIso8601String().split('T')[0],
+  //   'notes': _notesController.text.trim(),
+  //   'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+  //   'updated_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+  // });
+ 
+  // Clear fields
+  _placeNameController.clear();
+  _notesController.clear();
+  setState(() {
+    _locationArrivalDate = null;
+    _locationDepartureDate = null;
+  });
+ 
+  Navigator.pop(context);
+}
 
   Widget _buildDetailsCard() {
     return Container(
