@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -49,7 +50,6 @@ class _MyTripsPageState extends State<MyTripsPage> {
   late Future<List<Trip>> _tripsFuture;
   int _selectedIndex = 0;
 
-  // Form controllers for adding a trip
   final _tripNameController = TextEditingController();
   final _budgetController = TextEditingController();
   DateTime? _startDate;
@@ -261,205 +261,214 @@ class _MyTripsPageState extends State<MyTripsPage> {
   }
 
   void _showAddTripDialog() {
+    _tripNameController.clear();
+    _budgetController.clear();
+    _startDate = null;
+    _endDate = null;
+    _selectedCurrency = 'USD';
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFEFFAD3),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Add Trip',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2D6187),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFFEFFAD3),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Add Trip',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D6187),
+            ),
           ),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _tripNameController,
-                decoration: InputDecoration(
-                  hintText: 'Trip Name',
-                  filled: true,
-                  fillColor: const Color(0xFFDFF1D8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF7F9068),
-                      width: 1.5,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _tripNameController,
+                  decoration: InputDecoration(
+                    hintText: 'Trip Name',
+                    filled: true,
+                    fillColor: const Color(0xFFDFF1D8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF7F9068),
+                        width: 1.5,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
                     ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _startDate = picked;
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDFF1D8),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFF7F9068),
-                            width: 1.5,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setDialogState(() {
+                              _startDate = picked;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
                           ),
-                        ),
-                        child: Text(
-                          _startDate == null
-                              ? 'Start Date'
-                              : _startDate.toString().split(' ')[0],
-                          style: TextStyle(
-                            color: _startDate == null
-                                ? Colors.grey[600]
-                                : const Color(0xFF2D6187),
-                            fontSize: 14,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDFF1D8),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFF7F9068),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Text(
+                            _startDate == null
+                                ? 'Start Date'
+                                : _startDate.toString().split(' ')[0],
+                            style: TextStyle(
+                              color: _startDate == null
+                                  ? Colors.grey[600]
+                                  : const Color(0xFF2D6187),
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _endDate = picked;
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDFF1D8),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFF7F9068),
-                            width: 1.5,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            setDialogState(() {
+                              _endDate = picked;
+                            });
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
                           ),
-                        ),
-                        child: Text(
-                          _endDate == null
-                              ? 'End Date'
-                              : _endDate.toString().split(' ')[0],
-                          style: TextStyle(
-                            color: _endDate == null
-                                ? Colors.grey[600]
-                                : const Color(0xFF2D6187),
-                            fontSize: 14,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDFF1D8),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFF7F9068),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Text(
+                            _endDate == null
+                                ? 'End Date'
+                                : _endDate.toString().split(' ')[0],
+                            style: TextStyle(
+                              color: _endDate == null
+                                  ? Colors.grey[600]
+                                  : const Color(0xFF2D6187),
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _budgetController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: 'Budget (optional)',
-                  filled: true,
-                  fillColor: const Color(0xFFDFF1D8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF7F9068),
-                      width: 1.5,
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _budgetController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Budget (optional)',
+                    filled: true,
+                    fillColor: const Color(0xFFDFF1D8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF7F9068),
+                        width: 1.5,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
                     ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedCurrency,
-                items: ['USD', 'EUR', 'GBP', 'JPY', 'LKR']
-                    .map((currency) => DropdownMenuItem(
-                          value: currency,
-                          child: Text(currency),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() {
-                      _selectedCurrency = value;
-                    });
-                  }
-                },
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFDFF1D8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF7F9068),
-                      width: 1.5,
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedCurrency,
+                  items: ['USD', 'EUR', 'GBP', 'JPY', 'LKR']
+                      .map((currency) => DropdownMenuItem(
+                            value: currency,
+                            child: Text(currency),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() {
+                        _selectedCurrency = value;
+                      });
+                    }
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFFDFF1D8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF7F9068),
+                        width: 1.5,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
                     ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color(0xFF2D6187)),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: createTrip,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF28ABB9),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Create'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Color(0xFF2D6187)),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: createTrip,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF28ABB9),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
   }
