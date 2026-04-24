@@ -1,9 +1,34 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:tour_bud/config.dart';
 import 'package:tour_bud/widgets/bottom_nav_bar.dart';
 import 'package:tour_bud/trip_details.dart' show Location;
+
+/// Shared image store for managing gallery images per location
+class LocationImageStore {
+  static final Map<int, List<String>> _store = {};
+
+  static Map<int, List<String>> getStore() => _store;
+
+  static void addImage(int locationId, String imagePath) {
+    _store.putIfAbsent(locationId, () => <String>[]);
+    _store[locationId]!.add(imagePath);
+  }
+
+  static void removeImage(int locationId, int imageIndex) {
+    if (_store.containsKey(locationId) &&
+        imageIndex < _store[locationId]!.length) {
+      _store[locationId]!.removeAt(imageIndex);
+    }
+  }
+
+  static List<String> getImages(int locationId) {
+    return _store[locationId] ?? <String>[];
+  }
+}
 
 class Todo {
   final int id;
@@ -24,11 +49,21 @@ class Todo {
     required this.updatedAt,
   });
 
+  static bool _parseBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is int) return value == 1;
+    if (value is String) {
+      final normalized = value.toLowerCase().trim();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+    return false;
+  }
+
   factory Todo.fromJson(Map<String, dynamic> json) {
     return Todo(
       id: json['id'] as int,
       description: json['description'] as String,
-      isCompleted: json['is_completed'] as bool,
+      isCompleted: _parseBool(json['is_completed']),
       category: json['category'] as String,
       dueDate: json['due_date'] as String?,
       createdAt: json['created_at'] is int
@@ -57,17 +92,49 @@ class LocationDetailPage extends StatefulWidget {
 class _LocationDetailPageState extends State<LocationDetailPage> {
   late Future<List<Todo>> _todosFuture;
   final TextEditingController _todoController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
+  late List<String> _currentImagePaths;
 
   @override
   void initState() {
     super.initState();
     _todosFuture = fetchTodos();
+    _currentImagePaths = List.from(
+      LocationImageStore.getImages(widget.location.id),
+    );
   }
 
   @override
   void dispose() {
     _todoController.dispose();
     super.dispose();
+  }
+
+  void _syncLocationImages() {
+    // Update the shared store with current paths
+    final store = LocationImageStore.getStore();
+    store[widget.location.id] = List.from(_currentImagePaths);
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1200,
+    );
+    if (pickedFile == null) return;
+
+    setState(() {
+      _currentImagePaths.add(pickedFile.path);
+      _syncLocationImages();
+    });
+  }
+
+  void _deleteImage(int index) {
+    setState(() {
+      _currentImagePaths.removeAt(index);
+      _syncLocationImages();
+    });
   }
 
   Future<List<Todo>> fetchTodos() async {
@@ -82,8 +149,18 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
     final response = await http.get(uri, headers: AppConfig.authHeaders);
 
     if (response.statusCode != 200) {
-      final decoded = jsonDecode(response.body);
-      throw Exception(decoded['error'] ?? 'Failed to load todos');
+      final body = response.body.trim();
+      if (body.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(body);
+          if (decoded is Map<String, dynamic> && decoded['error'] != null) {
+            throw Exception(decoded['error']);
+          }
+        } catch (_) {
+          // Fall through to generic error
+        }
+      }
+      throw Exception('Failed to load todos');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -91,6 +168,23 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
     return todosData
         .map((item) => Todo.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  String _parseApiError(
+    http.Response response, {
+    String fallback = 'An error occurred',
+  }) {
+    final body = response.body.trim();
+    if (body.isEmpty) return fallback;
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic> && decoded['error'] != null) {
+        return decoded['error'].toString();
+      }
+    } catch (_) {
+      // Ignore invalid JSON body
+    }
+    return fallback;
   }
 
   Future<void> addTodo() async {
@@ -127,10 +221,13 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
           const SnackBar(content: Text('Todo added successfully')),
         );
       } else {
-        final decoded = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(decoded['error'] ?? 'Failed to add todo')),
+        final message = _parseApiError(
+          response,
+          fallback: 'Failed to add todo',
         );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -144,8 +241,8 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
     if (token == null) return;
 
     final endpoint = todo.isCompleted
-        ? '${AppConfig.baseUrl}/locations/${widget.location.id}/todos/${todo.id}/incomplete'
-        : '${AppConfig.baseUrl}/locations/${widget.location.id}/todos/${todo.id}/complete';
+        ? '${AppConfig.baseUrl}/todos/${todo.id}/incomplete'
+        : '${AppConfig.baseUrl}/todos/${todo.id}/complete';
 
     try {
       final response = await http.patch(
@@ -158,10 +255,13 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
           _todosFuture = fetchTodos();
         });
       } else {
-        final decoded = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(decoded['error'] ?? 'Failed to update todo')),
+        final message = _parseApiError(
+          response,
+          fallback: 'Failed to update todo',
         );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -176,9 +276,7 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
 
     try {
       final response = await http.delete(
-        Uri.parse(
-          '${AppConfig.baseUrl}/locations/${widget.location.id}/todos/${todo.id}',
-        ),
+        Uri.parse('${AppConfig.baseUrl}/todos/${todo.id}'),
         headers: AppConfig.authHeaders,
       );
 
@@ -190,10 +288,13 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
           const SnackBar(content: Text('Todo deleted successfully')),
         );
       } else {
-        final decoded = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(decoded['error'] ?? 'Failed to delete todo')),
+        final message = _parseApiError(
+          response,
+          fallback: 'Failed to delete todo',
         );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -353,6 +454,11 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
 
                     const SizedBox(height: 24),
 
+                    // Gallery Section
+                    _buildGallerySection(),
+
+                    const SizedBox(height: 24),
+
                     // Todos Section
                     _buildTodosSection(),
                   ],
@@ -368,6 +474,97 @@ class _LocationDetailPageState extends State<LocationDetailPage> {
           // Handle navigation if needed
         },
       ),
+    );
+  }
+
+  Widget _buildGallerySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Gallery',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D6187),
+              ),
+            ),
+            IconButton(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.add_a_photo, color: Color(0xFF2D6187)),
+              tooltip: 'Add photo',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_currentImagePaths.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF28ABB9).withOpacity(0.5),
+                width: 1.2,
+              ),
+            ),
+            child: const Text(
+              'No images yet. Tap the + button to add photos for this location.',
+              style: TextStyle(fontSize: 16, color: Color(0xFF2D6187)),
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _currentImagePaths.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1,
+            ),
+            itemBuilder: (context, index) {
+              final imagePath = _currentImagePaths[index];
+              return Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      color: const Color(0xFFE7F2E5),
+                      child: Image.file(
+                        File(imagePath),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.85),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        iconSize: 18,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => _deleteImage(index),
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+      ],
     );
   }
 
