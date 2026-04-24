@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:tour_bud/config.dart';
 import 'package:tour_bud/widgets/bottom_nav_bar.dart';
 import 'package:tour_bud/my_trips.dart' show Trip;
+import 'package:tour_bud/budget_page.dart';
 import 'location_detail_page.dart';
 
 class Location {
@@ -150,7 +151,14 @@ class _TripDetailsPageState extends State<TripDetailsPage> {
                     _buildFeatureCard(
                       title: 'Budget',
                       icon: Icons.wallet_outlined,
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BudgetPage(trip: widget.trip),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
 
