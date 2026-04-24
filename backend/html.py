@@ -1,7 +1,7 @@
 def api_info():
     return """
         <!DOCTYPE html>
-    <html>
+   <html>
     <head>
         <title>🌍 TourBud API - Your Complete Travel Companion</title>
         <meta charset="UTF-8">
@@ -54,6 +54,17 @@ def api_info():
             .status {
                 display: inline-block;
                 background: #4299e1;
+                color: white;
+                padding: 5px 15px;
+                border-radius: 20px;
+                font-size: 0.9em;
+                margin-top: 10px;
+                margin-left: 10px;
+            }
+            
+            .mobile-badge {
+                display: inline-block;
+                background: #ed8936;
                 color: white;
                 padding: 5px 15px;
                 border-radius: 20px;
@@ -199,6 +210,11 @@ def api_info():
                 border-left-color: #4299e1;
             }
             
+            .mobile-note {
+                background: #fed7d7;
+                border-left-color: #f56565;
+            }
+            
             .stats {
                 display: flex;
                 justify-content: space-around;
@@ -239,9 +255,10 @@ def api_info():
         <div class="container">
             <div class="header">
                 <h1>🌍 TourBud API</h1>
-                <p><strong>Your complete travel companion for planning adventures, managing budgets, tracking expenses, organizing locations, and ticking off todos!</strong></p>
-                <span class="version">Version 4.0.0</span>
+                <p><strong>Your complete travel companion for planning adventures, managing budgets, tracking expenses, organizing locations, capturing memories, and ticking off todos!</strong></p>
+                <span class="version">Version 5.0.0</span>
                 <span class="status">🚀 Operational</span>
+                <span class="mobile-badge">📱 Mobile-Ready</span>
             </div>
             
             <div class="grid">
@@ -276,6 +293,11 @@ def api_info():
                     <p>Stay organized with task management</p>
                 </div>
                 <div class="card">
+                    <h3>🖼️</h3>
+                    <h3>Gallery</h3>
+                    <p>Capture and share travel memories</p>
+                </div>
+                <div class="card">
                     <h3>👤</h3>
                     <h3>Profile</h3>
                     <p>Complete user profile management</p>
@@ -289,11 +311,11 @@ def api_info():
             
             <div class="stats">
                 <div class="stat-box">
-                    <div class="stat-number">24</div>
+                    <div class="stat-number">28</div>
                     <div>Total Endpoints</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-number">21</div>
+                    <div class="stat-number">25</div>
                     <div>Authenticated Endpoints</div>
                 </div>
                 <div class="stat-box">
@@ -307,6 +329,10 @@ def api_info():
                 <div class="stat-box">
                     <div class="stat-number">7</div>
                     <div>Todo Categories</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">4</div>
+                    <div>Image Formats</div>
                 </div>
             </div>
             
@@ -341,13 +367,13 @@ def api_info():
                     &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
                     &nbsp;&nbsp;-d '{"description": "Visit Eiffel Tower", "category": "sightseeing", "due_date": "2024-06-02"}'<br><br>
                     
-                    # 6. Add an expense<br>
-                    curl -X POST http://localhost:5000/trips/1/expenses \<br>
+                    # 6. Upload a photo to gallery<br>
+                    curl -X POST http://localhost:5000/locations/1/gallery \<br>
                     &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE" \<br>
-                    &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
-                    &nbsp;&nbsp;-d '{"amount": 89.50, "category": "food", "description": "Dinner in Paris"}'<br><br>
+                    &nbsp;&nbsp;-F "image=@/path/to/photo.jpg" \<br>
+                    &nbsp;&nbsp;-F "caption=Eiffel Tower at sunset"<br><br>
                     
-                    # 7. View your complete trip plan<br>
+                    # 7. View your complete trip plan with photos<br>
                     curl -X GET http://localhost:5000/trips/1/locations \<br>
                     &nbsp;&nbsp;-H "Authorization: Bearer YOUR-TOKEN-HERE"<br><br>
                     
@@ -431,7 +457,7 @@ def api_info():
                 <div class="endpoint">
                     <span class="method delete">DELETE</span>
                     <span class="path">/trips/&lt;trip_id&gt;</span>
-                    <p>Delete a trip (cascades to all locations, todos, and expenses)</p>
+                    <p>Delete a trip (cascades to all locations, todos, expenses, and gallery images)</p>
                 </div>
             </div>
             
@@ -441,7 +467,7 @@ def api_info():
                 <div class="endpoint">
                     <span class="method get">GET</span>
                     <span class="path">/trips/&lt;trip_id&gt;/locations</span>
-                    <p>Get all locations for a trip with their todos and stay duration</p>
+                    <p>Get all locations for a trip with their todos, stay duration, and gallery images</p>
                 </div>
                 
                 <div class="endpoint">
@@ -459,7 +485,7 @@ def api_info():
                 <div class="endpoint">
                     <span class="method delete">DELETE</span>
                     <span class="path">/trips/&lt;trip_id&gt;/locations/&lt;location_id&gt;</span>
-                    <p>Delete a location (cascades to all associated todos)</p>
+                    <p>Delete a location (cascades to all associated todos and gallery images)</p>
                 </div>
             </div>
             
@@ -538,6 +564,40 @@ def api_info():
             </div>
             
             <div class="section">
+                <h2>🖼️ Gallery Management Endpoints</h2>
+                
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="path">/locations/&lt;location_id&gt;/gallery</span>
+                    <p>Get all images for a location with full metadata and URLs</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/locations/&lt;location_id&gt;/gallery</span>
+                    <p>Upload a single image (supports JPEG, PNG, GIF, WebP, HEIC)</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="path">/locations/&lt;location_id&gt;/gallery/bulk</span>
+                    <p>Upload multiple images at once with optional captions</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="path">/gallery/&lt;image_id&gt;</span>
+                    <p>Update image caption/description</p>
+                </div>
+                
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="path">/gallery/&lt;image_id&gt;</span>
+                    <p>Delete an image (removes file from disk too)</p>
+                </div>
+            </div>
+            
+            <div class="section">
                 <h2>📊 Expense Categories</h2>
                 <div class="category-grid">
                     <div class="category-card">
@@ -609,9 +669,11 @@ def api_info():
                     <li>✅ Todo management with 7 categories and due dates</li>
                     <li>✅ Automatic budget vs. spent calculation with real-time status</li>
                     <li>✅ Expense tracking with category breakdown and percentages</li>
-                    <li>✅ Daily average spending based on trip duration</li>
+                    <li>✅ Photo gallery with captions and automatic file organization</li>
                     <li>✅ Multi-currency support (USD, EUR, GBP, etc.)</li>
-                    <li>✅ Cascade deletions (trip → locations → todos)</li>
+                    <li>✅ Cascade deletions (trip → locations → todos → gallery)</li>
+                    <li>✅ Mobile-optimized endpoints with image compression</li>
+                    <li>✅ Support for HEIC/HEIF images (iOS native format)</li>
                 </ul>
             </div>
             
@@ -619,9 +681,23 @@ def api_info():
                 <strong>🔗 Data Hierarchy:</strong>
                 <ul style="margin-top: 10px; margin-left: 20px;">
                     <li>👤 User → ✈️ Trips → 🗺️ Locations → ✅ Todos</li>
+                    <li>👤 User → ✈️ Trips → 🗺️ Locations → 🖼️ Gallery</li>
                     <li>👤 User → ✈️ Trips → 💸 Expenses</li>
-                    <li>Deleting a trip removes all associated locations, todos, and expenses</li>
-                    <li>Deleting a location removes all associated todos</li>
+                    <li>Deleting a trip removes all associated locations, todos, expenses, and gallery images</li>
+                    <li>Deleting a location removes all associated todos and gallery images</li>
+                    <li>Gallery images are physically deleted from the server filesystem</li>
+                </ul>
+            </div>
+            
+            <div class="mobile-note">
+                <strong>📱 Mobile Platform Support:</strong>
+                <ul style="margin-top: 10px; margin-left: 20px;">
+                    <li>✅ iOS: Fully supported with native HEIC image format compatibility</li>
+                    <li>✅ Android: Fully supported with automatic image compression</li>
+                    <li>✅ Supports background uploads for multiple images</li>
+                    <li>✅ Automatic image optimization for mobile networks</li>
+                    <li>✅ Progressive loading with thumbnail support (coming soon)</li>
+                    <li>⚠️ Production deployment requires HTTPS (enforced by iOS/Android)</li>
                 </ul>
             </div>
             
@@ -636,6 +712,8 @@ def api_info():
                     <li>💰 Expenses automatically update trip budget tracking</li>
                     <li>🗺️ Location dates must be within trip date range</li>
                     <li>✅ Todo due dates must be within location date range</li>
+                    <li>🖼️ Supported image formats: PNG, JPG, JPEG, GIF, WebP, HEIC, HEIF</li>
+                    <li>📏 Max image size: 16MB (compressed to ~3MB for mobile)</li>
                     <li>🔑 Include your token in requests: <code>Authorization: Bearer &lt;your-token-here&gt;</code></li>
                 </ul>
             </div>
@@ -643,23 +721,25 @@ def api_info():
             <div class="note" style="background: #e6fffa; border-left-color: #38b2ac;">
                 <strong>🚀 Features Coming Soon:</strong>
                 <ul style="margin-top: 10px; margin-left: 20px;">
-                    <li>📸 Photo uploads for trips, locations, and expenses</li>
+                    <li>📸 Live photo and video support</li>
+                    <li>🗺️ Interactive maps with location pinning</li>
                     <li>👥 Travel buddy matching and connections</li>
                     <li>💬 Chat and messaging between travel buddies</li>
                     <li>💸 Expense splitting between group members</li>
                     <li>⭐ Place reviews and recommendations</li>
                     <li>🌐 Real-time currency conversion</li>
-                    <li>📱 Mobile app with offline support</li>
-                    <li>🗺️ Interactive maps for locations</li>
+                    <li>📱 Mobile app with offline support and local caching</li>
+                    <li>🖼️ Thumbnail generation for faster gallery loading</li>
+                    <li>🔒 OAuth2 authentication (Google, Facebook login)</li>
                 </ul>
             </div>
             
             <div class="footer">
                 <p>🌟 Happy travels with TourBud! 🌟</p>
-                <p><small>Complete travel planning solution - Version 4.0.0</small></p>
-                <p><small>Made with ❤️ for travelers around the world</small></p>
+                <p><small>Complete travel planning solution - Version 5.0.0</small></p>
+                <p><small>Made with ❤️ for travelers around the world | 📱 iOS & Android Ready</small></p>
             </div>
         </div>
     </body>
     </html>
-    """
+"""

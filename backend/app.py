@@ -9,6 +9,10 @@ from flask_cors import CORS
 import sqlite3
 import secrets
 import time
+import os
+from werkzeug.utils import secure_filename
+from werkzeug.datastructures import FileStorage
+
 
 from html import api_info
 
@@ -2535,6 +2539,530 @@ def incomplete_todo(todo_id):
         "message": "Todo marked as incomplete",
         "todo_id": todo_id
     }), 200
+
+# Configuration for file uploads
+UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'}
+MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
+
+# Create upload folder if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Helper function to check allowed file extensions
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Helper function to get file size
+def get_file_size(file_path):
+    return os.path.getsize(file_path) if os.path.exists(file_path) else 0
+
+# ============ GALLERY MANAGEMENT ENDPOINTS ============
+
+@app.route("/locations/<int:location_id>/gallery", methods=["GET"])
+def get_location_gallery(location_id):
+    """
+    Get all images for a specific location.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: List of gallery images
+        - 401: Unauthorized
+        - 403: Forbidden
+        - 404: Location not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify location belongs to user's trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT l.id FROM locations l
+        JOIN trips t ON l.trip_id = t.id
+        WHERE l.id = ? AND t.user_id = ?
+        """,
+        (location_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    
+    # Get all images for the location
+    cursor.execute(
+        """
+        SELECT * FROM gallery 
+        WHERE location_id = ? 
+        ORDER BY uploaded_at DESC
+        """,
+        (location_id,)
+    )
+    
+    images = cursor.fetchall()
+    conn.close()
+    
+    # Build full URLs for images
+    base_url = request.host_url.rstrip('/')
+    images_list = []
+    for image in images:
+        images_list.append({
+            "id": image["id"],
+            "image_url": f"{base_url}/{image['image_path']}",
+            "image_path": image["image_path"],
+            "caption": image["caption"],
+            "file_name": image["file_name"],
+            "file_size": image["file_size"],
+            "mime_type": image["mime_type"],
+            "uploaded_at": image["uploaded_at"],
+            "uploaded_at_formatted": time.strftime("%B %d, %Y at %H:%M", time.localtime(image["uploaded_at"]))
+        })
+    
+    return jsonify({
+        "location_id": location_id,
+        "images": images_list,
+        "count": len(images_list)
+    }), 200
+
+
+@app.route("/locations/<int:location_id>/gallery", methods=["POST"])
+def upload_image(location_id):
+    """
+    Upload an image to a location's gallery.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected form data:
+    - image: file (required)
+    - caption: string (optional)
+    
+    Returns:
+        - 201: Image uploaded successfully
+        - 400: Invalid file or missing data
+        - 401: Unauthorized
+        - 404: Location not found
+        - 413: File too large
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify location belongs to user's trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT l.id FROM locations l
+        JOIN trips t ON l.trip_id = t.id
+        WHERE l.id = ? AND t.user_id = ?
+        """,
+        (location_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    
+    # Check if file was uploaded
+    if 'image' not in request.files:
+        conn.close()
+        return jsonify({"error": "No image file provided"}), 400
+    
+    file = request.files['image']
+    
+    if file.filename == '':
+        conn.close()
+        return jsonify({"error": "No image selected"}), 400
+    
+    # Validate file type
+    if not allowed_file(file.filename):
+        conn.close()
+        return jsonify({"error": f"File type not allowed. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"}), 400
+    
+    # Secure the filename and create unique name
+    original_filename = secure_filename(file.filename)
+    file_ext = original_filename.rsplit('.', 1)[1].lower()
+    unique_filename = f"{int(time.time())}_{location_id}_{original_filename}"
+    
+    # Create location-specific subdirectory
+    location_folder = os.path.join(UPLOAD_FOLDER, str(location_id))
+    os.makedirs(location_folder, exist_ok=True)
+    
+    # Save the file
+    file_path = os.path.join(location_folder, unique_filename)
+    relative_path = os.path.join('static/uploads', str(location_id), unique_filename).replace('\\', '/')
+    
+    try:
+        file.save(file_path)
+        
+        # Get file size
+        file_size = os.path.getsize(file_path)
+        
+        # Check file size limit
+        if file_size > MAX_FILE_SIZE:
+            os.remove(file_path)
+            conn.close()
+            return jsonify({"error": f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"}), 413
+        
+        # Get caption from form data
+        caption = request.form.get('caption', '')
+        
+        # Get mime type (simple detection)
+        mime_type = f"image/{file_ext}"
+        if file_ext == 'jpg':
+            mime_type = 'image/jpeg'
+        
+        # Insert into database
+        cursor.execute(
+            """
+            INSERT INTO gallery (location_id, image_path, caption, file_name, file_size, mime_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (location_id, relative_path, caption, original_filename, file_size, mime_type)
+        )
+        conn.commit()
+        
+        image_id = cursor.lastrowid
+        
+        # Get the uploaded image info
+        cursor.execute("SELECT * FROM gallery WHERE id = ?", (image_id,))
+        new_image = cursor.fetchone()
+        conn.close()
+        
+        base_url = request.host_url.rstrip('/')
+        
+        return jsonify({
+            "message": "Image uploaded successfully",
+            "image": {
+                "id": new_image["id"],
+                "image_url": f"{base_url}/{relative_path}",
+                "image_path": relative_path,
+                "caption": new_image["caption"],
+                "file_name": new_image["file_name"],
+                "file_size": new_image["file_size"],
+                "mime_type": new_image["mime_type"],
+                "uploaded_at": new_image["uploaded_at"]
+            }
+        }), 201
+        
+    except Exception as e:
+        # Clean up file if database insert fails
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        conn.close()
+        return jsonify({"error": f"Failed to upload image: {str(e)}"}), 500
+
+
+@app.route("/gallery/<int:image_id>", methods=["PUT"])
+def update_image_caption(image_id):
+    """
+    Update the caption/description of a gallery image.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected JSON:
+    {
+        "caption": str (required)
+    }
+    
+    Returns:
+        - 200: Caption updated successfully
+        - 400: Missing caption
+        - 401: Unauthorized
+        - 404: Image not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify image belongs to user's location and trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT g.id FROM gallery g
+        JOIN locations l ON g.location_id = l.id
+        JOIN trips t ON l.trip_id = t.id
+        WHERE g.id = ? AND t.user_id = ?
+        """,
+        (image_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Image not found"}), 404
+    
+    # Validate request
+    if not request.is_json:
+        conn.close()
+        return jsonify({"error": "Request must be JSON"}), 415
+    
+    data = request.get_json()
+    if not data or "caption" not in data:
+        conn.close()
+        return jsonify({"error": "caption is required"}), 400
+    
+    caption = data["caption"]
+    
+    # Update caption
+    try:
+        cursor.execute(
+            "UPDATE gallery SET caption = ? WHERE id = ?",
+            (caption, image_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "message": "Caption updated successfully",
+            "image_id": image_id,
+            "caption": caption
+        }), 200
+        
+    except sqlite3.Error as e:
+        conn.close()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/gallery/<int:image_id>", methods=["DELETE"])
+def delete_image(image_id):
+    """
+    Delete an image from the gallery (removes file from disk too).
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Returns:
+        - 200: Image deleted successfully
+        - 401: Unauthorized
+        - 404: Image not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify image belongs to user's location and trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT g.id, g.image_path FROM gallery g
+        JOIN locations l ON g.location_id = l.id
+        JOIN trips t ON l.trip_id = t.id
+        WHERE g.id = ? AND t.user_id = ?
+        """,
+        (image_id, user_id)
+    )
+    
+    image = cursor.fetchone()
+    if image is None:
+        conn.close()
+        return jsonify({"error": "Image not found"}), 404
+    
+    # Delete the file from disk
+    file_path = image["image_path"]
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            # Log error but continue with database deletion
+            print(f"Warning: Could not delete file {file_path}: {e}")
+    
+    # Delete from database
+    cursor.execute("DELETE FROM gallery WHERE id = ?", (image_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        "message": "Image deleted successfully",
+        "image_id": image_id
+    }), 200
+
+
+# Optional: Bulk upload endpoint
+@app.route("/locations/<int:location_id>/gallery/bulk", methods=["POST"])
+def bulk_upload_images(location_id):
+    """
+    Upload multiple images to a location's gallery at once.
+    
+    Expected Authorization header:
+    Authorization: Bearer <token>
+    
+    Expected form data:
+    - images: files (multiple, required)
+    - captions: string (optional, comma-separated for multiple images)
+    
+    Returns:
+        - 201: Images uploaded successfully
+        - 400: Invalid files
+        - 401: Unauthorized
+        - 404: Location not found
+    """
+    # Authenticate user
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    token = auth_header.replace("Bearer ", "", 1) if auth_header.startswith("Bearer ") else auth_header
+    user_id = get_user_id_from_token(token)
+    
+    if user_id is None:
+        return jsonify({"error": "Invalid or expired token"}), 401
+    
+    # Verify location belongs to user's trip
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        SELECT l.id FROM locations l
+        JOIN trips t ON l.trip_id = t.id
+        WHERE l.id = ? AND t.user_id = ?
+        """,
+        (location_id, user_id)
+    )
+    
+    if cursor.fetchone() is None:
+        conn.close()
+        return jsonify({"error": "Location not found"}), 404
+    
+    # Check if files were uploaded
+    if 'images' not in request.files:
+        conn.close()
+        return jsonify({"error": "No image files provided"}), 400
+    
+    files = request.files.getlist('images')
+    
+    if len(files) == 0 or files[0].filename == '':
+        conn.close()
+        return jsonify({"error": "No images selected"}), 400
+    
+    # Get captions if provided (comma-separated)
+    captions_input = request.form.get('captions', '')
+    captions = [c.strip() for c in captions_input.split(',')] if captions_input else []
+    
+    uploaded_images = []
+    errors = []
+    
+    for idx, file in enumerate(files):
+        if file.filename == '':
+            continue
+            
+        # Validate file type
+        if not allowed_file(file.filename):
+            errors.append(f"File {file.filename}: Type not allowed")
+            continue
+        
+        # Process each file
+        original_filename = secure_filename(file.filename)
+        file_ext = original_filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{int(time.time())}_{location_id}_{idx}_{original_filename}"
+        
+        # Create location-specific subdirectory
+        location_folder = os.path.join(UPLOAD_FOLDER, str(location_id))
+        os.makedirs(location_folder, exist_ok=True)
+        
+        # Save the file
+        file_path = os.path.join(location_folder, unique_filename)
+        relative_path = os.path.join('static/uploads', str(location_id), unique_filename).replace('\\', '/')
+        
+        try:
+            file.save(file_path)
+            
+            # Get file size
+            file_size = os.path.getsize(file_path)
+            
+            # Check file size limit
+            if file_size > MAX_FILE_SIZE:
+                os.remove(file_path)
+                errors.append(f"File {file.filename}: Too large (>16MB)")
+                continue
+            
+            # Get caption for this image (if provided)
+            caption = captions[idx] if idx < len(captions) else ''
+            
+            # Get mime type
+            mime_type = f"image/{file_ext}"
+            if file_ext == 'jpg':
+                mime_type = 'image/jpeg'
+            
+            # Insert into database
+            cursor.execute(
+                """
+                INSERT INTO gallery (location_id, image_path, caption, file_name, file_size, mime_type)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (location_id, relative_path, caption, original_filename, file_size, mime_type)
+            )
+            conn.commit()
+            
+            image_id = cursor.lastrowid
+            
+            # Get the uploaded image info
+            cursor.execute("SELECT * FROM gallery WHERE id = ?", (image_id,))
+            new_image = cursor.fetchone()
+            
+            base_url = request.host_url.rstrip('/')
+            
+            uploaded_images.append({
+                "id": new_image["id"],
+                "image_url": f"{base_url}/{relative_path}",
+                "caption": new_image["caption"],
+                "file_name": new_image["file_name"]
+            })
+            
+        except Exception as e:
+            # Clean up file if error occurs
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            errors.append(f"File {file.filename}: {str(e)}")
+    
+    conn.close()
+    
+    return jsonify({
+        "message": f"Successfully uploaded {len(uploaded_images)} image(s)",
+        "uploaded_images": uploaded_images,
+        "errors": errors if errors else None,
+        "total_uploaded": len(uploaded_images),
+        "total_errors": len(errors)
+    }), 201
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

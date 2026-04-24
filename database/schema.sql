@@ -149,3 +149,23 @@ END;
 
 -- Predefined todo categories (for reference)
 -- 'sightseeing', 'food', 'transport', 'accommodation', 'packing', 'booking', 'other'
+
+------------------------
+-- Gallery Management --
+------------------------
+
+CREATE TABLE gallery (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_id INTEGER NOT NULL,
+    image_path TEXT NOT NULL, -- Local file path (e.g., /static/uploads/filename.jpg)
+    caption TEXT, -- Optional description
+    file_name TEXT NOT NULL, -- Original file name
+    file_size INTEGER, -- File size in bytes
+    mime_type TEXT, -- e.g., image/jpeg, image/png
+    uploaded_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+);
+
+-- Create indexes for faster queries
+CREATE INDEX idx_gallery_location_id ON gallery(location_id);
+CREATE INDEX idx_gallery_uploaded_at ON gallery(uploaded_at);
