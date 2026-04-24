@@ -181,8 +181,8 @@ class _MyTripsPageState extends State<MyTripsPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddTripDialog,
-        backgroundColor: const Color(0xFF7F9068),
-        child: const Icon(Icons.add),
+        backgroundColor: const Color(0xFF28ABB9),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       bottomNavigationBar: CustomBottomNavBar(
         currentIndex: _selectedIndex,
@@ -454,7 +454,7 @@ class _MyTripsPageState extends State<MyTripsPage> {
           ElevatedButton(
             onPressed: createTrip,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7F9068),
+              backgroundColor: const Color(0xFF28ABB9),
               foregroundColor: Colors.white,
             ),
             child: const Text('Create'),

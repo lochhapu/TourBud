@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:tour_bud/config.dart';
 import 'package:tour_bud/my_trips.dart';
 
 class ExpenseItem {
+  final int id;
   final String title;
   final String category;
   final double amount;
@@ -10,6 +15,7 @@ class ExpenseItem {
   final String note;
 
   ExpenseItem({
+    required this.id,
     required this.title,
     required this.category,
     required this.amount,
@@ -17,6 +23,20 @@ class ExpenseItem {
     required this.date,
     required this.note,
   });
+
+  factory ExpenseItem.fromJson(Map<String, dynamic> json) {
+    return ExpenseItem(
+      id: json['id'] as int,
+      title: (json['description'] as String?) == ''
+          ? json['category'] as String
+          : json['description'] as String,
+      category: json['category'] as String,
+      amount: (json['amount'] as num).toDouble(),
+      currency: (json['currency'] as String).toUpperCase(),
+      date: DateTime.parse(json['expense_date'] as String),
+      note: json['description'] as String? ?? '',
+    );
+  }
 }
 
 class BudgetPage extends StatefulWidget {
@@ -41,6 +61,7 @@ class _BudgetPageState extends State<BudgetPage> {
   final TextEditingController _noteController = TextEditingController();
   String _selectedCategory = 'Transport';
   String _selectedCurrency = 'USD';
+  bool _isLoadingExpenses = false;
 
   static const Map<String, double> _currencyRatesToUsd = {
     'USD': 1.0,
@@ -55,6 +76,7 @@ class _BudgetPageState extends State<BudgetPage> {
     _selectedCurrency = widget.trip.currency.isNotEmpty
         ? widget.trip.currency
         : 'USD';
+    _loadExpenses();
   }
 
   @override
@@ -70,6 +92,88 @@ class _BudgetPageState extends State<BudgetPage> {
     final fromRate = _currencyRatesToUsd[widget.trip.currency] ?? 1.0;
     final toRate = _currencyRatesToUsd[_selectedCurrency] ?? 1.0;
     return widget.trip.budgetGoal! * fromRate / toRate;
+  }
+
+  static const Map<String, String> _uiToApiCategory = {
+    'Transport': 'transportation',
+    'Food': 'food',
+    'Hotel': 'accommodation',
+    'Shopping': 'shopping',
+    'Entertainment': 'activities',
+  };
+
+  static const Map<String, String> _apiToUiCategory = {
+    'transportation': 'Transport',
+    'food': 'Food',
+    'accommodation': 'Hotel',
+    'shopping': 'Shopping',
+    'activities': 'Entertainment',
+    'other': 'Other',
+  };
+
+  String _displayCategory(String category) {
+    return _apiToUiCategory[category.toLowerCase()] ?? category;
+  }
+
+  String _apiCategory(String uiCategory) {
+    return _uiToApiCategory[uiCategory] ?? uiCategory.toLowerCase();
+  }
+
+  Future<void> _loadExpenses() async {
+    setState(() {
+      _isLoadingExpenses = true;
+    });
+
+    final uri = Uri.parse('${AppConfig.baseUrl}/trips/${widget.trip.id}/expenses');
+    try {
+      final response = await http.get(uri, headers: AppConfig.authHeaders);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final expensesJson = data['expenses'] as List<dynamic>;
+        setState(() {
+          _expenses
+            ..clear()
+            ..addAll(expensesJson
+                .map((item) => ExpenseItem.fromJson(item as Map<String, dynamic>))
+                .toList());
+        });
+      } else {
+        final decoded = jsonDecode(response.body);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(decoded['error'] ?? 'Failed to load expenses.')),
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load expenses.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingExpenses = false;
+        });
+      }
+    }
+  }
+
+  double _convertAmount(double amount, String fromCurrency, String toCurrency) {
+    final fromRate = _currencyRatesToUsd[fromCurrency] ?? 1.0;
+    final toRate = _currencyRatesToUsd[toCurrency] ?? 1.0;
+    return amount * fromRate / toRate;
+  }
+
+  double get _totalExpensesInSelectedCurrency {
+    return _expenses.fold(0.0, (sum, expense) {
+      return sum + _convertAmount(expense.amount, expense.currency, _selectedCurrency);
+    });
+  }
+
+  double get _remainingBalance {
+    return _convertedBudget - _totalExpensesInSelectedCurrency;
   }
 
   String _formatCurrency(double value) {
@@ -94,19 +198,118 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   IconData _iconForCategory(String category) {
-    switch (category) {
-      case 'Food':
+    switch (category.toLowerCase()) {
+      case 'food':
         return Icons.restaurant;
-      case 'Transport':
+      case 'transport':
+      case 'transportation':
         return Icons.local_taxi;
-      case 'Hotel':
+      case 'hotel':
+      case 'accommodation':
         return Icons.hotel;
-      case 'Shopping':
+      case 'shopping':
         return Icons.shopping_bag;
-      case 'Entertainment':
+      case 'entertainment':
+      case 'activities':
         return Icons.movie;
       default:
         return Icons.receipt_long;
+    }
+  }
+
+  Future<bool> _saveExpenseToServer(String title, double amount, String note) async {
+    final body = {
+      'amount': amount,
+      'category': _apiCategory(_selectedCategory),
+      'currency': widget.trip.currency.isNotEmpty ? widget.trip.currency : 'USD',
+      'description': note.isNotEmpty ? '$title - $note' : title,
+      'expense_date': DateTime.now().toString().split(' ')[0],
+    };
+
+    final uri = Uri.parse('${AppConfig.baseUrl}/trips/${widget.trip.id}/expenses');
+    try {
+      final response = await http.post(
+        uri,
+        headers: AppConfig.authHeaders,
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 201) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final expenseJson = decoded['expense'] as Map<String, dynamic>;
+        final expense = ExpenseItem.fromJson(expenseJson);
+
+        setState(() {
+          _expenses.insert(0, expense);
+        });
+        return true;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(decoded['error'] ?? 'Unable to save expense.')),
+        );
+      }
+      return false;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to save expense.')),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<void> _deleteExpense(ExpenseItem expense) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete expense'),
+        content: const Text('Are you sure you want to delete this expense?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: navy),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final uri = Uri.parse('${AppConfig.baseUrl}/trips/${widget.trip.id}/expenses/${expense.id}');
+    try {
+      final response = await http.delete(uri, headers: AppConfig.authHeaders);
+      if (response.statusCode == 200) {
+        setState(() {
+          _expenses.removeWhere((item) => item.id == expense.id);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Expense deleted successfully.')),
+          );
+        }
+      } else {
+        final decoded = jsonDecode(response.body);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(decoded['error'] ?? 'Unable to delete expense.')),
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to delete expense.')),
+        );
+      }
     }
   }
 
@@ -207,12 +410,13 @@ class _BudgetPageState extends State<BudgetPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: navy,
+              backgroundColor: teal,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () {
+            onPressed: () async {
               final title = _titleController.text.trim();
               final amount = double.tryParse(_amountController.text.trim());
+              final note = _noteController.text.trim();
               if (title.isEmpty || amount == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Please enter a title and valid amount.')),
@@ -220,19 +424,12 @@ class _BudgetPageState extends State<BudgetPage> {
                 return;
               }
 
-              setState(() {
-                _expenses.add(ExpenseItem(
-                  title: title,
-                  category: _selectedCategory,
-                  amount: amount,
-                  currency: widget.trip.currency.isNotEmpty ? widget.trip.currency : 'USD',
-                  date: DateTime.now(),
-                  note: _noteController.text.trim(),
-                ));
-              });
-              Navigator.pop(context);
+              final saved = await _saveExpenseToServer(title, amount, note);
+              if (saved && mounted) {
+                Navigator.pop(context);
+              }
             },
-            child: const Text('Save'),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -240,6 +437,15 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   List<Widget> _buildExpenseGroups() {
+    if (_isLoadingExpenses) {
+      return [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+
     if (_expenses.isEmpty) {
       return [
         Padding(
@@ -313,7 +519,7 @@ class _BudgetPageState extends State<BudgetPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${expense.category} charges',
+                  '${_displayCategory(expense.category)} charges',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -344,7 +550,17 @@ class _BudgetPageState extends State<BudgetPage> {
                 style: const TextStyle(color: Color(0xFF7A8A9D), fontSize: 12),
               ),
               const SizedBox(height: 8),
-              const Icon(Icons.chevron_right, color: Color(0xFF7A8A9D)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => _deleteExpense(expense),
+                    child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right, color: Color(0xFF7A8A9D)),
+                ],
+              ),
             ],
           ),
         ],
@@ -408,8 +624,8 @@ class _BudgetPageState extends State<BudgetPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddExpenseDialog,
-        backgroundColor: navy,
-        child: const Icon(Icons.add),
+        backgroundColor: teal,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -441,7 +657,7 @@ class _BudgetPageState extends State<BudgetPage> {
             children: [
               Expanded(
                 child: Text(
-                  '${_formatCurrency(budgetValue)}',
+                  '${widget.trip.currency.toUpperCase()} ${_formatCurrency(budgetValue)}',
                   style: const TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
@@ -487,19 +703,41 @@ class _BudgetPageState extends State<BudgetPage> {
               border: Border.all(color: Colors.grey.shade300),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Converted',
-                  style: TextStyle(color: Color(0xFF7A8A9D), fontSize: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Converted',
+                      style: TextStyle(color: Color(0xFF7A8A9D), fontSize: 14),
+                    ),
+                    Text(
+                      '${_selectedCurrency.toUpperCase()} ${_formatCurrency(_convertedBudget)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: navy,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '${_selectedCurrency.toUpperCase()} ${_formatCurrency(_convertedBudget)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: navy,
-                  ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Remaining balance',
+                      style: TextStyle(color: Color(0xFF7A8A9D), fontSize: 14),
+                    ),
+                    Text(
+                      '${_selectedCurrency.toUpperCase()} ${_formatCurrency(_remainingBalance)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _remainingBalance < 0 ? Colors.red : navy,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
